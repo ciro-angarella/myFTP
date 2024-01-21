@@ -9,13 +9,34 @@
 #define PORT 50000
 #define MAX_CONNECTIONS 5
 
+ssize_t full_write(int fd, const void *buffer, size_t count) {
+    size_t bytes_written = 0;
+    ssize_t n;
+
+    while (bytes_written < count) {
+        n = write(fd, buffer + bytes_written, count - bytes_written);
+        if (n <= 0) {
+            if (n == -1) {
+                // Errore durante la scrittura
+                perror("Errore nella scrittura sulla socket");
+            }
+            break;
+        }
+        bytes_written += n;
+    }
+
+    return bytes_written;
+}
+
 void handle_client(int fd_client
 ) {
     char buffer[1024];
-    char *helloWorld = "Hello World, from Server";
+    const char helloWorld[] = "Hello World, from Server";
+
 
     //manda una stringa hello world al client
-    write(fd_client, &helloWorld, strlen(helloWorld));
+    full_write(fd_client, helloWorld, strlen(helloWorld));
+    printf("ho mandato %s\n", helloWorld);
 
     // Chiudi il socket del client dopo che la connessione è terminata
     close(fd_client);
@@ -34,7 +55,7 @@ int main() {
     }
 
     // Inizializzazione della struttura sockaddr_in
-    //memset(&server_addr, 0, sizeof(server_addr)); in caso di problemi usarla
+    memset(&server_addr, 0, sizeof(server_addr)); 
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
