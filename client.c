@@ -3,7 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#ciao
+
 #define PORT 50000
 #define MAX_BUFFER_SIZE 1024
 
