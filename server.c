@@ -3,108 +3,140 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <sys/types.h>
-#include <sys/socket.h>
+#include <sys/select.h>
 
+#define MAX_CLIENTS 10
+#define BUFFER_SIZE 1024
 #define PORT 50000
-#define MAX_CONNECTIONS 5
-
-ssize_t full_write(int fd, const void *buffer, size_t count) {
-    size_t bytes_written = 0;
-    ssize_t n;
-
-    while (bytes_written < count) {
-        n = write(fd, buffer + bytes_written, count - bytes_written);
-        if (n <= 0) {
-            if (n == -1) {
-                // Errore durante la scrittura
-                perror("Errore nella scrittura sulla socket");
-            }
-            break;
-        }
-        bytes_written += n;
-    }
-
-    return bytes_written;
-}
-
-void handle_client(int fd_client
-) {
-    char buffer[1024];
-    const char helloWorld[] = "Hello World, from Server";
-
-
-    //manda una stringa hello world al client
-    full_write(fd_client, helloWorld, strlen(helloWorld));
-    printf("ho mandato %s\n", helloWorld);
-
-    // Chiudi il socket del client dopo che la connessione è terminata
-    close(fd_client);
-}
 
 int main() {
-    int fd_server, fd_client;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t client_addr_len = sizeof(client_addr);
-    pid_t child_pid;
+    int serverSocket, clientSockets[MAX_CLIENTS], maxClients = MAX_CLIENTS;
+    fd_set readSet, writeSet;
+    char buffer[BUFFER_SIZE];
 
-    // Creazione del socket del server
-    if ( (fd_server = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        perror("Errore nella creazione del socket del server");
+    // Create a socket
+    if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        perror("Error creating socket");
         exit(EXIT_FAILURE);
     }
 
-    // Inizializzazione della struttura sockaddr_in
-    memset(&server_addr, 0, sizeof(server_addr)); 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(PORT);
+    // Set up server address
+    struct sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(PORT);
 
-    // Binding del socket del server
-    if (bind (fd_server, (struct sockaddr *)&server_addr, sizeof(server_addr) ) == -1) {
-        perror("Errore nel binding del socket del server");
+    // Bind the socket
+    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
+        perror("Error binding socket");
         exit(EXIT_FAILURE);
     }
 
-    // Inizio dell'ascolto delle connessioni in arrivo
-    if (listen (fd_server, MAX_CONNECTIONS) == -1) {
-        perror("Errore nell'ascolto delle connessioni");
+    // Listen for incoming connections
+    if (listen(serverSocket, 5) == -1) {
+        perror("Error listening for connections");
         exit(EXIT_FAILURE);
     }
 
-    printf("Server in ascolto sulla porta %d...\n", PORT);
+    printf("Server listening on port 50000...\n");
 
-    // Accettazione e gestione delle connessioni in arrivo
+    // Initialize client sockets array
+    for (int i = 0; i < maxClients; ++i) {
+        clientSockets[i] = 0;
+    }
+
     while (1) {
-        // Accettazione della connessione
-        if ((fd_client = accept (fd_server, (struct sockaddr *)&client_addr, &client_addr_len)) == -1) {
-            perror("Errore nell'accettare la connessione");
-            continue;
+        FD_ZERO(&readSet);
+        FD_ZERO(&writeSet);
+        FD_SET(serverSocket, &readSet);
+
+        int maxSocket = serverSocket;
+
+        // Add client sockets to the set
+        for (int i = 0; i < maxClients; ++i) {
+            int clientSocket = clientSockets[i];
+
+            if (clientSocket > 0) {
+                FD_SET(clientSocket, &readSet);
+                FD_SET(clientSocket, &writeSet);
+            }
+
+            if (clientSocket > maxSocket) {
+                maxSocket = clientSocket;
+            }
         }
 
-        printf("Connessione accettata da %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-
-        // Creazione di un processo figlio per gestire la connessione
-        if ((child_pid = fork()) == 0) {
-            // Questo è il processo figlio
-            close (fd_server);  // Il processo figlio non ha bisogno del socket del server
-
-            // Gestisci la connessione del client
-            handle_client(fd_client);
-
-            // Esci dal processo figlio dopo aver gestito la connessione
-            exit(EXIT_SUCCESS);
-        } else if (child_pid > 0) {
-            // Questo è il processo padre
-            close(fd_client);  // Il processo padre non ha bisogno del socket del client
-        } else {
-            perror("Errore nella creazione di un processo figlio");
+        // Use select to monitor sockets
+        if (select(maxSocket + 1, &readSet, &writeSet, NULL, NULL) == -1) {
+            perror("Error in select");
             exit(EXIT_FAILURE);
         }
-    }
 
-    // Chiudi il socket del server alla fine
-    close (fd_server);
+        // Check for incoming connections
+        if (FD_ISSET(serverSocket, &readSet)) {
+            int newSocket;
+            if ((newSocket = accept(serverSocket, (struct sockaddr*)NULL, NULL)) == -1) {
+                perror("Error accepting connection");
+                exit(EXIT_FAILURE);
+            }
+
+            printf("New connection accepted\n");
+
+            // Add the new connection to the list of clients
+            for (int i = 0; i < maxClients; ++i) {
+                if (clientSockets[i] == 0) {
+                    clientSockets[i] = newSocket;
+                    break;
+                }
+            }
+        }
+
+        // Check for data to read or write on client sockets
+    for (int i = 0; i < maxClients; ++i) {
+    int clientSocket = clientSockets[i];
+
+    if (clientSocket > 0) {     
+        if (FD_ISSET(clientSocket, &readSet) && FD_ISSET(clientSocket, &writeSet)) {
+
+            char buffer[BUFFER_SIZE];
+            //pulizia buffer
+            memset(buffer, 0, sizeof(buffer));
+            //lettura del socket
+            ssize_t bytesRead = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
+            //aggiunta terminatore stringa
+            buffer[bytesRead] = '\0';
+            // printf("Contenuto del buffer ricevuto: %s\n", buffer); per il debug
+
+
+            if (bytesRead < 0) {
+                perror("Errore durante la ricezione dei dati");
+            } else if (bytesRead == 0) { //se non riceve dati dal client
+                // Connessione chiusa dal client
+                printf("Client disconnesso\n");
+            } else {
+                // se la lettura va a buon fine , gestione dei comandi FTP
+                printf("Ho ricevuto dal client: %s\n", buffer);
+
+                const char* hello = "hello";
+                int cmpResult = strcmp(buffer, hello); //controllo del comando
+                //printf("Risultato del confronto: %d\n", cmpResult); per il debug
+
+                if (cmpResult == 0) {
+                   // printf("Il comando è: %s\n", buffer); per il debug
+
+                    // Invia "hello world from server" al client
+                    const char* response = "hello world from server";
+                    send(clientSocket, response, strlen(response), 0);
+                    printf("Ho mandato al client: %s\n", response);
+                }
+            }
+        }
+    }
+}
+
+        
+        
+    }
 
     return 0;
 }
