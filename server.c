@@ -126,7 +126,15 @@ int main() {
                     } else if (bytesRead == 0) { //if not recv byte from the reading
                         // close the client
                         printf("Client disconnesso\n");
+                        
+                        // Remove the client socket from the set
+                        FD_CLR(clientSocket, &all_fd);
+
+                        // Reset the client socket in the array to 0
+                        clientSockets[i] = 0;
+
                         close(clientSocket);
+
 
                     } else {
                         // if the reading is right, handle the comand
