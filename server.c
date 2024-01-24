@@ -11,13 +11,13 @@
 
 int main() {
     int serverSocket, clientSockets[MAX_CLIENTS], maxClients = MAX_CLIENTS;
-    fd_set readSet, writeSet; //set for read and write of select.h lib
+    fd_set all_fd; //set for read and write of select.h lib
     char buffer[BUFFER_SIZE];
 
     // Create a socket
-    if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+    if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
         perror("Error creating socket");
-        exit(EXIT_FAILURE);
+        exit(1);
     }
 
     // Set up server address
@@ -27,15 +27,15 @@ int main() {
     serverAddr.sin_port = htons(PORT);
 
     // Bind the socket
-    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
+    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0 ) {
         perror("Error binding socket");
-        exit(EXIT_FAILURE);
+        exit(1);
     }
 
     // Listen for incoming connections
-    if (listen(serverSocket, 5) == -1) {
+    if (listen(serverSocket, 5) < 0 ) {
         perror("Error listening for connections");
-        exit(EXIT_FAILURE);
+        exit(1);
     }
 
     printf("Server listening on port 50000...\n");
@@ -50,11 +50,10 @@ int main() {
 
     /* main loop */
     while (1) {
-        FD_ZERO(&readSet);  //initialize the fd set for the read
-        FD_ZERO(&writeSet); //initialize the fd set for the write
-        FD_SET(serverSocket, &readSet); //add the serverSocket to the read set
+        FD_ZERO(&all_fd);  //initialize the fd set for the read
+        FD_SET(serverSocket, &all_fd); //add the serverSocket to the read set
 
-        /* track the number of active socket*/
+       //
         int maxSocket = serverSocket;
 
         // Add client sockets to the set
@@ -64,9 +63,8 @@ int main() {
 
             //if clientSocket is associated to the array clientSockets
             if (clientSocket > 0) {
-                //add the clientSocket in readSet and writeSet
-                FD_SET(clientSocket, &readSet); 
-                FD_SET(clientSocket, &writeSet);
+                //add the clientSocket in all_fd and 
+                FD_SET(clientSocket, &all_fd); 
             }
             
             //update the max value of clientSocket
@@ -76,17 +74,17 @@ int main() {
         }
 
         // Use select to monitor sockets
-        if (select(maxSocket + 1, &readSet, &writeSet, NULL, NULL) == -1) {
+        if (select(maxSocket + 1, &all_fd, NULL, NULL, NULL) < 0 ) {
             perror("Error in select");
-            exit(EXIT_FAILURE);
+            exit(1);
         }
 
         // Check for incoming connections
-        if (FD_ISSET(serverSocket, &readSet)) {
+        if (FD_ISSET(serverSocket, &all_fd)) {
             int newSocket;
-            if ((newSocket = accept(serverSocket, (struct sockaddr*)NULL, NULL)) == -1) {
+            if ((newSocket = accept(serverSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
                 perror("Error accepting connection");
-                exit(EXIT_FAILURE);
+                exit(1);
             }
 
             printf("New connection accepted\n");
@@ -109,7 +107,7 @@ int main() {
             //if clientSocket is occuped
             if (clientSocket > 0) {     
                 //if clientSocket is ready for read and write
-                if (FD_ISSET(clientSocket, &readSet) && FD_ISSET(clientSocket, &writeSet)) {
+                if (FD_ISSET(clientSocket, &all_fd)) {
 
                     //main of the server's code...
 
