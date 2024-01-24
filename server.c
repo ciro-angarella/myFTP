@@ -115,7 +115,7 @@ int main() {
                     //clear of the buffer
                     memset(buffer, 0, sizeof(buffer));
                     //reading of socket
-                    ssize_t bytesRead = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
+                    ssize_t bytesRead = read(clientSocket, buffer, sizeof(buffer) - 1);
                     //aggiunta terminatore stringa
                     buffer[bytesRead] = '\0';
                     // printf("Contenuto del buffer ricevuto: %s\n", buffer); per il debug
@@ -149,7 +149,7 @@ int main() {
 
                             // Invia "hello world from server" al client
                             const char* response = "hello world from server";
-                            send(clientSocket, response, strlen(response), 0);
+                            write(clientSocket, response, strlen(response));
                             printf("Ho mandato al client: %s\n", response);
                         }
                     }

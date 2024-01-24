@@ -14,9 +14,9 @@ int main() {
 
     // Creazione del socket
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (clientSocket == -1) {
+    if (clientSocket < 0) {
         perror("Errore nella creazione del socket");
-        exit(EXIT_FAILURE);
+        exit(1);
     }
 
     // Configurazione dell'indirizzo del server
@@ -25,13 +25,11 @@ int main() {
     serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Indirizzo IP del server
 
     // Connessione al server
-    if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
+    if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
         perror("Errore nella connessione al server");
         close(clientSocket);
-        exit(EXIT_FAILURE);
+        exit(1);
     }
-
-    printf("Connessione al server riuscita\n");
 
     // Ciclo di comunicazione con il server
     while (1) {
@@ -42,7 +40,7 @@ int main() {
         buffer[strcspn(buffer, "\n")] = '\0';
 
         // Invia la stringa al server
-        send(clientSocket, buffer, strlen(buffer), 0);
+        write(clientSocket, buffer, strlen(buffer));
 
         // Termina il ciclo se l'utente inserisce "exit"
         if (strcmp(buffer, "exit") == 0) {
@@ -52,7 +50,7 @@ int main() {
         // Ricevi la risposta dal server
         memset(buffer, 0, sizeof(buffer));
         //metodo bloccante, quindi aspetta la risposta dal server
-        recv(clientSocket, buffer, sizeof(buffer), 0);
+        read(clientSocket, buffer, sizeof(buffer));
         printf("Risposta dal server: %s\n", buffer);
     }
 
