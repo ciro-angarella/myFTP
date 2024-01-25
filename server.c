@@ -5,14 +5,17 @@
 #include <arpa/inet.h>
 #include <sys/select.h>
 
-#define MAX_CLIENTS 10
 #define BUFFER_SIZE 1024
 #define PORT 50000
+#define BACKLOG 4
 
 int main() {
-    int serverSocket, clientSockets[MAX_CLIENTS], maxClients = MAX_CLIENTS;
+    int serverSocket;
+    int fd_Sockets[FD_SETSIZE]; //contain the fd of client
     fd_set all_fd; //set for read and write of select.h lib
+    int maxSocket;
     char buffer[BUFFER_SIZE];
+    
 
     // Create a socket
     if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
@@ -33,35 +36,41 @@ int main() {
     }
 
     // Listen for incoming connections
-    if (listen(serverSocket, 5) < 0 ) {
+    if (listen(serverSocket, BACKLOG) < 0 ) {
         perror("Error listening for connections");
         exit(1);
     }
 
     printf("Server listening on port 50000...\n");
 
+     FD_SET(serverSocket, &all_fd);
+
+    maxSocket = serverSocket; //the max fd value choose by the select
+    fd_Sockets[maxSocket] = 1;
+     
+
     /* Initialize client sockets array,
      can handle up to maxClients */
-    for (int i = 0; i < maxClients; ++i) {
+    for (int i = 0; i < maxSocket; ++i) {
 
         //initilize the all the fd to 0, so no socket are associated to the array
-        clientSockets[i] = 0; 
+        fd_Sockets[i] = 0; 
     }
 
     /* main loop */
     while (1) {
-        FD_ZERO(&all_fd);  //initialize the fd set for the read
+        FD_ZERO(&all_fd);  //initialize the fd set for the read and the write
         FD_SET(serverSocket, &all_fd); //add the serverSocket to the read set
 
-       //
-        int maxSocket = serverSocket;
+       
+       
 
         // Add client sockets to the set
-        for (int i = 0; i < maxClients; ++i) {
+        for (int i = 0; i < maxSocket; ++i) {
             //store in clientSocket the value of clientSocket's array
-            int clientSocket = clientSockets[i];
+            int clientSocket = fd_Sockets[i];
 
-            //if clientSocket is associated to the array clientSockets
+            //if clientSocket is associated to the array fd_Sockets
             if (clientSocket > 0) {
                 //add the clientSocket in all_fd and 
                 FD_SET(clientSocket, &all_fd); 
@@ -90,19 +99,19 @@ int main() {
             printf("New connection accepted\n");
 
             // Add the new connection to the list of clients
-            for (int i = 0; i < maxClients; ++i) {
-                //check if clientSockets position is free
-                if (clientSockets[i] == 0) {
+            for (int i = 0; i < maxSocket; ++i) {
+                //check if fd_Sockets position is free
+                if (fd_Sockets[i] == 0) {
                     //associate the finded position to the new client socket
-                    clientSockets[i] = newSocket;
+                    fd_Sockets[i] = newSocket;
                     break;
                 }
             }
         }
 
         // Check for data to read or write on client sockets
-        for (int i = 0; i < maxClients; ++i) {
-            int clientSocket = clientSockets[i]; //the clientSocket that use the service
+        for (int i = 0; i < maxSocket; ++i) {
+            int clientSocket = fd_Sockets[i]; //the clientSocket that use the service
 
             //if clientSocket is occuped
             if (clientSocket > 0) {     
@@ -131,7 +140,7 @@ int main() {
                         FD_CLR(clientSocket, &all_fd);
 
                         // Reset the client socket in the array to 0
-                        clientSockets[i] = 0;
+                        fd_Sockets[i] = 0;
 
                         close(clientSocket);
 
