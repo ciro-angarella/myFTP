@@ -9,6 +9,9 @@
 #define PORT 50000
 #define BACKLOG 4
 
+char* serverPI(char* command) ;
+ssize_t receiveCommand(int sockfd, char *buffer);
+
 int main() {
     int serverSocket;
     int fd_Sockets[FD_SETSIZE]; //contain the fd of client
@@ -122,7 +125,7 @@ int main() {
                     //clear of the buffer
                     memset(buffer, 0, sizeof(buffer));
                     //reading of socket
-                    ssize_t bytesRead = read(clientSocket, buffer, sizeof(buffer) - 1);
+                    ssize_t bytesRead = receiveCommand(clientSocket, buffer);
                     //aggiunta terminatore stringa
                     buffer[bytesRead] = '\0';
                     // printf("Contenuto del buffer ricevuto: %s\n", buffer); per il debug
@@ -141,30 +144,12 @@ int main() {
                         fd_Sockets[i] = 0;
 
                         close(clientSocket);
-
-
                     } else {
-                        // if the reading is right, handle the comand
-                        printf("Ho ricevuto dal client: %s\n", buffer);
 
-                        const char* hello = "hello";
-                        int cmpResult = strcmp(buffer, hello); //controllo del comando
-                        //printf("Risultato del confronto: %d\n", cmpResult); per il debug
+                        char *command;
+                        command = serverPI(buffer);
+                        write(clientSocket,command, strlen(command));
 
-                        if (cmpResult == 0) {
-                            // printf("Il comando è: %s\n", buffer); per il debug
-
-                            // Invia "hello world from server" al client
-                            const char* response = "hello world from server";
-                            write(clientSocket, response, strlen(response));
-                            memset(buffer, 0, sizeof(buffer));
-                            printf("Ho mandato al client: %s\n", response);
-                        }else{
-                            const char* nresponse = "commando errato\n";
-                            write(clientSocket, nresponse, strlen(nresponse));
-                            memset(buffer, 0, sizeof(buffer));
-                            printf("Ho mandato al client: %s\n", nresponse);
-                        }
                     }
                 }
             }
@@ -173,4 +158,51 @@ int main() {
     }
 
     return 0;
+}
+
+//----------------------SERVER PI--------------------
+char* serverPI(char* command) {
+    char* code_str = NULL;  // Inizializzazione a NULL di default
+
+    // Utilizza uno statement switch per gestire i comandi
+    if (strncmp(command, "user", 4) == 0) {
+        // Implementa la logica per il comando USER
+        code_str = "331";
+    } else if (strncmp(command, "pass", 4) == 0) {
+        // Implementa la logica per il comando PASS
+        code_str = "230";
+    } else if (strncmp(command, "retr", 4) == 0) {
+        // Implementa la logica per il comando RETR
+        code_str = "150";
+    } else if (strncmp(command, "stor", 4) == 0) {
+        // Implementa la logica per il comando STOR
+        code_str = "150";
+    } else if (strncmp(command, "list", 4) == 0) {
+        // Implementa la logica per il comando LIST
+        code_str = "150";
+    } else if (strncmp(command, "quit", 4) == 0) {
+        // Implementa la logica per il comando QUIT
+        code_str = "221";
+    } else {
+        // Comando non riconosciuto
+        code_str = "500";
+    }
+
+    return code_str;
+}
+
+
+ssize_t receiveCommand(int sockfd, char *buffer) {
+
+    ssize_t bytesRead;
+    memset(buffer, 0, sizeof(buffer));
+
+    // Ricevi la risposta dal server
+    if ((bytesRead = read(sockfd, buffer, sizeof(buffer) -1 )) < 0) {
+        perror("Errore nella ricezione del comando\n");
+        exit(1);
+    }
+
+    return bytesRead;
+
 }

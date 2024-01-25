@@ -7,6 +7,9 @@
 #define PORT 50000
 #define BUFFER_SIZE 1024
 
+void sendCommand(int sockfd,  char *command);
+void receiveResponse(int sockfd, char *buffer, size_t buffer_size);
+
 int main() {
     int clientSocket;
     struct sockaddr_in serverAddr;
@@ -39,19 +42,18 @@ int main() {
         // Rimuovi il newline inserito da fgets
         buffer[strcspn(buffer, "\n")] = '\0';
 
-        // Invia la stringa al server
-        write(clientSocket, buffer, strlen(buffer));
-
-        // Termina il ciclo se l'utente inserisce "exit"
-        if (strcmp(buffer, "exit") == 0) {
-            break;
-        }
-
-        // Ricevi la risposta dal server
+        sendCommand(clientSocket, buffer);
         memset(buffer, 0, sizeof(buffer));
-        //metodo bloccante, quindi aspetta la risposta dal server
-        read(clientSocket, buffer, sizeof(buffer));
-        printf("Risposta dal server: %s\n", buffer);
+
+        char *code_responsed;
+        receiveResponse(clientSocket, code_responsed, sizeof(code_responsed)-1);
+
+
+        // Stampa la risposta del server
+        printf("Server Response:%s\n", code_responsed);
+        memset(code_responsed, 0, sizeof(code_responsed));
+
+
     }
 
     // Chiudi il socket
@@ -59,3 +61,26 @@ int main() {
 
     return 0;
 }
+
+//-------------------CLIENT PI FUNC----------------------
+
+void sendCommand(int sockfd, char *command) {
+    // Invia il comando al server
+    if ( write(sockfd, command, strlen(command)) < 0) {
+        perror("Errore nell'invio del comando\n");
+        exit(1);
+    }
+
+}
+
+void receiveResponse(int sockfd, char *buffer, size_t buffer_size) {
+    memset(buffer, 0, buffer_size);
+
+    // Ricevi la risposta dal server
+    ssize_t bytesRead = read(sockfd, buffer, buffer_size - 1);
+    if (bytesRead < 0) {
+        perror("Errore nella ricezione della risposta\n");
+        exit(1);
+    }
+}
+
