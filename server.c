@@ -13,7 +13,7 @@ int main() {
     int serverSocket;
     int fd_Sockets[FD_SETSIZE]; //contain the fd of client
     fd_set all_fd; //set for read and write of select.h lib
-    int maxSocket;
+    int maxSocket; //the max fd 
     char buffer[BUFFER_SIZE];
     
 
