@@ -63,8 +63,6 @@ int main() {
         FD_SET(serverSocket, &all_fd); //add the serverSocket to the read set
 
        
-       
-
         // Add client sockets to the set
         for (int i = 0; i < maxSocket; ++i) {
             //store in clientSocket the value of clientSocket's array
@@ -159,7 +157,13 @@ int main() {
                             // Invia "hello world from server" al client
                             const char* response = "hello world from server";
                             write(clientSocket, response, strlen(response));
+                            memset(buffer, 0, sizeof(buffer));
                             printf("Ho mandato al client: %s\n", response);
+                        }else{
+                            const char* nresponse = "commando errato\n";
+                            write(clientSocket, nresponse, strlen(nresponse));
+                            memset(buffer, 0, sizeof(buffer));
+                            printf("Ho mandato al client: %s\n", nresponse);
                         }
                     }
                 }
