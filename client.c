@@ -45,7 +45,7 @@ int main() {
         sendCommand(clientSocket, buffer);
         memset(buffer, 0, sizeof(buffer));
 
-        char *code_responsed;
+        char code_responsed[BUFFER_SIZE];
         receiveResponse(clientSocket, code_responsed, sizeof(code_responsed)-1);
 
 
@@ -82,5 +82,8 @@ void receiveResponse(int sockfd, char *buffer, size_t buffer_size) {
         perror("Errore nella ricezione della risposta\n");
         exit(1);
     }
+
+    // terminatore del buffer
+    buffer[bytesRead] = '\0';
 }
 
