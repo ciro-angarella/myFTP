@@ -11,10 +11,9 @@ void sendCommand(int sockfd,  char *command);
 void receiveResponse(int sockfd, char *buffer, size_t buffer_size);
 
 int main() {
-    int clientSocket;
-    struct sockaddr_in serverAddr;
-    char buffer[BUFFER_SIZE];
-
+    int clientSocket, dataSocket;
+    struct sockaddr_in serverAddr, dataAddr;
+    
     // Creazione del socket
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSocket < 0) {
@@ -37,21 +36,53 @@ int main() {
     // Ciclo di comunicazione con il server
     while (1) {
         printf("Inserisci una stringa da inviare al server (exit per terminare): ");
-        fgets(buffer, BUFFER_SIZE, stdin);
+        char command_buffer[BUFFER_SIZE];
+        fgets(command_buffer, BUFFER_SIZE, stdin);
 
         // Rimuovi il newline inserito da fgets
-        buffer[strcspn(buffer, "\n")] = '\0';
+        command_buffer[strcspn(command_buffer, "\n")] = '\0';
 
-        sendCommand(clientSocket, buffer);
-        memset(buffer, 0, sizeof(buffer));
+        sendCommand(clientSocket, command_buffer);
+        memset(command_buffer, 0, sizeof(command_buffer));
 
-        char code_responsed[BUFFER_SIZE];
-        receiveResponse(clientSocket, code_responsed, sizeof(code_responsed)-1);
+        char port_responsed[BUFFER_SIZE];
+        receiveResponse(clientSocket, port_responsed, sizeof(port_responsed)-1);
 
 
         // Stampa la risposta del server
-        printf("Server Response:%s\n", code_responsed);
-        memset(code_responsed, 0, sizeof(code_responsed));
+        printf("la porta del data transfer è :%s\n", port_responsed);
+
+        //setup data socket
+        int data_port = atoi(port_responsed);
+        
+        dataSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+        if (dataSocket < 0) {
+            perror("Errore nella creazione del data socket");
+            exit(1);
+        }
+
+        // Configurazione dell'indirizzo del server
+        dataAddr.sin_family = AF_INET;
+        dataAddr.sin_port = htons(data_port);
+        dataAddr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Indirizzo IP del server
+
+        memset(port_responsed, 0, sizeof(port_responsed));
+
+        // Connessione al server
+        if (connect(dataSocket, (struct sockaddr*)&dataAddr, sizeof(dataAddr)) < 0) {
+            perror("Errore nella connessione al data port");
+            close(dataSocket);
+            exit(1);
+        }
+
+        char data_buffer[BUFFER_SIZE];
+        receiveResponse(dataSocket,data_buffer, sizeof(data_buffer)-1);
+
+        printf("%s\n", data_buffer);
+        memset(data_buffer, 0, sizeof(data_buffer));
+        
+        close(dataSocket);
 
 
     }
@@ -63,6 +94,8 @@ int main() {
 }
 
 //-------------------CLIENT PI FUNC----------------------
+
+
 
 void sendCommand(int sockfd, char *command) {
     // Invia il comando al server
