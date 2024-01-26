@@ -42,19 +42,22 @@ int main() {
         // Rimuovi il newline inserito da fgets
         command_buffer[strcspn(command_buffer, "\n")] = '\0';
 
+        //invio comandi al server
         sendCommand(clientSocket, command_buffer);
         memset(command_buffer, 0, sizeof(command_buffer));
 
+        //riceve la porta sulla quale collegarsi per il data transfer
         char port_responsed[BUFFER_SIZE];
         receiveResponse(clientSocket, port_responsed, sizeof(port_responsed)-1);
 
 
-        // Stampa la risposta del server
+        // Stampa la porta data dal server
         printf("la porta del data transfer è :%s\n", port_responsed);
 
-        //setup data socket
+        //setup data port
         int data_port = atoi(port_responsed);
         
+        //creazione data socket
         dataSocket = socket(AF_INET, SOCK_STREAM, 0);
 
         if (dataSocket < 0) {
@@ -62,7 +65,7 @@ int main() {
             exit(1);
         }
 
-        // Configurazione dell'indirizzo del server
+        // Configurazione dell'indirizzo del server per il data trasnfer
         dataAddr.sin_family = AF_INET;
         dataAddr.sin_port = htons(data_port);
         dataAddr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Indirizzo IP del server
@@ -76,12 +79,14 @@ int main() {
             exit(1);
         }
 
+        //riceve file
         char data_buffer[BUFFER_SIZE];
         receiveResponse(dataSocket,data_buffer, sizeof(data_buffer)-1);
 
         printf("%s\n", data_buffer);
         memset(data_buffer, 0, sizeof(data_buffer));
         
+        //chiusura data socket
         close(dataSocket);
 
 
