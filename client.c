@@ -44,6 +44,7 @@ int main() {
 
         //invio comandi al server
         sendCommand(clientSocket, command_buffer);
+        //printf("ho mandato: %s", command_buffer);
         memset(command_buffer, 0, sizeof(command_buffer));
 
         //riceve la porta sulla quale collegarsi per il data transfer

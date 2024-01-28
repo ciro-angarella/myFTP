@@ -10,8 +10,25 @@
 #define DATA_PORT 50001
 #define BACKLOG 4
 
+struct USER{
+    char name[20];
+    char pass[20];
+    int log_state; //0 unlog, 1 logged
+    int clientSocket;
+};
+
+struct USER registred_user[3] = {
+                 {"enzo", "insalata", 0, -1},
+                 {"ciro", "marika", 0, -1} ,
+                 {"camilla", "FTP", 0, -1}
+                 };
+
+
+
 char* serverPI(char* command, int dataSocket, int clientSocket) ;
 ssize_t receiveCommand(int sockfd, char *buffer);
+int ricercaNomeUser(struct USER array[], int lunghezza,  char *arg);
+int ricercaClientSocketUser(struct USER array[], int lunghezza, int fd);
 
 int main() {
     int serverSocket; //PI socket
@@ -177,11 +194,15 @@ int main() {
                         fd_command_sockets[i] = 0;
 
                         close(clientSocket);
-                    } else {
+                    } else { 
 
-                        char *command;
-                        command = serverPI(buffer, dataSocket, clientSocket);
-                        //write(clientSocket,command, strlen(command));
+                            
+                            char *command;
+                            
+                            //printf("elaborazione richiesta\n");
+                            command = serverPI(buffer, dataSocket, clientSocket);
+                            memset(buffer, 0, sizeof(buffer));
+                            //write(clientSocket,command, strlen(command))  
 
                     }
                 }
@@ -193,19 +214,76 @@ int main() {
     return 0;
 }
 
+
+
 //----------------------SERVER PI----------------------
 char* serverPI(char* command, int dataSocket, int clientSocket) {
     char* code_str = NULL;  // Inizializzazione a NULL di default
     char* data_port_value = "50001";
 
+
+    char command_word[20]; //comando inserito dall'utente es : retr
+    char arg[20];// argomento del comando  es: nomefile.text
+
+    
+    printf("il comando ricevuto è: %s\n", command);
+    //divide il command dell'utente in due stringhe, command_word e arg;
+    sscanf(command,"%s" "%s",command_word, arg);
+    printf("comando: %s, arg: %s\n", command_word, arg);
+
+
     // Utilizza uno statement switch per gestire i comandi
-    if (strncmp(command, "user", 4) == 0) {
+    if ((strncmp(command_word, "user", 4) == 0)) {
         // Implementa la logica per il comando USER
+
+        
+
+        // Listen for incoming connections on PI socket
+        if (listen(dataSocket, BACKLOG) < 0 ) {
+            perror("Error listening for data  connections");
+            exit(1);
+        }
+
+        //manda il numero di porta al client
+        write(clientSocket, data_port_value, strlen(data_port_value));
+
+        //accepet della connessione
+        int newDataSocket;
+        if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
+            perror("Error accepting connection to data socket\n");
+            exit(1);
+        }
+
+        int find = ricercaNomeUser(registred_user, 3, arg);
+
+        if(find > -1){
+            printf("utente trovato\n");
+            // cast del find
+            struct USER *pUser = &registred_user[find];
+
+            char *welcome_message = "Welcome in myFTP\n";
+
+            pUser->clientSocket = clientSocket;
+            pUser->log_state = 1;
+
+            write(newDataSocket, welcome_message, strlen(welcome_message));
+            
+        }else if(find == -1){
+            printf("utente non trovato\n");
+            char *not_found = "user non trovato\n";
+            write(newDataSocket, not_found, strlen(not_found));
+            
+        }
+
+        close(newDataSocket);
+      
+     
+
         code_str = "331";
-    } else if (strncmp(command, "pass", 4) == 0) {
+    } else if (strncmp(command_word, "pass", 4) == 0) {
         // Implementa la logica per il comando PASS
         code_str = "230";
-    } else if (strncmp(command, "retr", 4) == 0) {
+    } else if (strncmp(command_word, "retr", 4) == 0) {
         // Implementa la logica per il comando RETR
 
         // Listen for incoming connections on PI socket
@@ -234,13 +312,13 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
          printf("ho chiuso la data port\n");
         
         code_str = "150";
-    } else if (strncmp(command, "stor", 4) == 0) {
+    } else if (strncmp(command_word, "stor", 4) == 0) {
         // Implementa la logica per il comando STOR
         code_str = "150";
-    } else if (strncmp(command, "list", 4) == 0) {
+    } else if (strncmp(command_word, "list", 4) == 0) {
         // Implementa la logica per il comando LIST
         code_str = "150";
-    } else if (strncmp(command, "quit", 4) == 0) {
+    } else if (strncmp(command_word, "quit", 4) == 0) {
         // Implementa la logica per il comando QUIT
         code_str = "221";
     } else {
@@ -277,13 +355,13 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
 }
 
 
-ssize_t receiveCommand(int sockfd, char *buffer) {
+ssize_t receiveCommand(int sockfd, char buffer[BUFFER_SIZE]) {
 
     ssize_t bytesRead;
-    memset(buffer, 0, sizeof(buffer));
+    memset(buffer, 0, BUFFER_SIZE);
 
     // Ricevi la risposta dal server
-    if ((bytesRead = read(sockfd, buffer, sizeof(buffer) -1 )) < 0) {
+    if ((bytesRead = read(sockfd, buffer, BUFFER_SIZE -1 )) < 0) {
         perror("Errore nella ricezione del comando\n");
         exit(1);
     }
@@ -291,3 +369,16 @@ ssize_t receiveCommand(int sockfd, char *buffer) {
     return bytesRead;
 
 }
+
+int ricercaNomeUser(struct USER array[], int lunghezza,  char *arg) {
+    for (int i = 0; i < lunghezza; i++) {
+        if (strcmp(array[i].name, arg) == 0) {
+            
+            return i; // Nome trovato, restituisce l'indice
+        }
+    }
+
+    return -1; // Nome non trovato
+}
+
+
