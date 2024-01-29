@@ -12,7 +12,7 @@
 #define PORT 50000
 #define DATA_PORT 50001
 #define BACKLOG 4
-#define MAX_USER 4
+#define MAX_USER 3
 
 
 struct USER{
@@ -28,7 +28,6 @@ struct USER registered_user[MAX_USER] = {
                  {"enzo", "insalata", 0, -1, 0},
                  {"ciro", "marika", 0, -1, 0} ,
                  {"camilla", "FTP", 0, -1, 0},
-                 {"", "", 0, -1, 0}
                  };
 
 
@@ -233,21 +232,18 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
     char* code_str = NULL;  // Inizializzazione a NULL di default
     char* data_port_value = "50001";
 
-    //restitusce l'indice dove è conservata la struttura dell'utente
+    //restitusce l'indice dove è conservata la struttura dell'utente, se non la trova restituisce -1
     int user_index = ricercaFdUser(registered_user,MAX_USER, clientSocket);
     
     int is_logged = 0;
 
-    if(registered_user[user_index].log_state == 1){
+    if(user_index == -1){
+        is_logged = 0;
+
+    } else if(registered_user[user_index].log_state == 1){
         is_logged = 1;
     }
-
-    int is_anon = 0;
-
-    if(strcmp(registered_user[user_index].name, "") == 0){
-        is_anon = 1;
-    }
-
+    printf("is logged value : %d\n", is_logged);
     char command_word[20]; //comando inserito dall'utente es : retr
     char arg[20];// argomento del comando  es: nomefile.text
 
@@ -260,7 +256,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
 
 
     // Utilizza uno statement switch per gestire i comandi
-    if ((strncmp(command_word, "user", 4) == 0)) {
+    if ((strncmp(command_word, "user", 4) == 0)&&(is_logged == 0)) {
         
 
         //manda il numero di porta al client
@@ -297,12 +293,15 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
         close(newDataSocket);
        
         code_str = "331";
-    } else if (strncmp(command_word, "pass", 4) == 0) {
-
-        if(user_index < 0){
-            close(clientSocket);
-    }
+    } else if ((strncmp(command_word, "pass", 4)== 0 )&& (registered_user[user_index].finded == 1 ) && (is_logged == 0)) {
         
+        /*
+        
+                if(user_index < 0){
+            close(clientSocket);
+        }
+        */
+
 
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
@@ -314,30 +313,34 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
             exit(1);
         }
 
-        int find = ricercaFdUser(registered_user, MAX_USER, clientSocket);
-        printf("%s è stato trovato\n" ,registered_user[find].name);
+        //int find = ricercaFdUser(registered_user, MAX_USER, clientSocket); non serve ma non toccare
+        printf("%s è stato trovato\n" ,registered_user[user_index].name);
 
-        if((strcmp(registered_user[find].pass, arg) == 0 ) && (registered_user[find].finded == 1)){
-            printf("%s è entrato\n" ,registered_user[find].name);
-            struct USER *pUser = &registered_user[find];
+        //confronto pass
+        if((strcmp(registered_user[user_index].pass, arg) == 0 ) && (registered_user[user_index].finded == 1)){
+            printf("%s è entrato\n" ,registered_user[user_index].name);
+            struct USER *pUser = &registered_user[user_index];
             pUser->log_state = 1;
 
             char user_logged[BUFFER_SIZE];
-            sprintf(user_logged, "Welcome in my FTP %s\n", registered_user[find].name);
+            sprintf(user_logged, "Welcome in my FTP %s\n", registered_user[user_index].name);
 
             write(newDataSocket, user_logged , strlen(user_logged));
         }else{
-            
-            close(clientSocket);
+
+            char *worng_pass = "pass errata, riprova\n";
+
+            write(newDataSocket, worng_pass , strlen(worng_pass));
+            close(newDataSocket);
         }
 
         close(newDataSocket);
 
         code_str = "230";
-    } else if ((strncmp(command_word, "retr", 4) == 0)&&(is_logged == 1)) {
+    } else if ((strncmp(command_word, "retr", 4) == 0)) {
         // Implementa la logica per il comando RETR
 
-
+       
         
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
@@ -361,9 +364,9 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
          
 
         code_str = "150";
-    } else if ((strncmp(command_word, "stor", 4)== 0) &&(is_logged == 1) && (is_anon == 0) ) {
+    } else if ((strncmp(command_word, "stor", 4)== 0) &&(is_logged == 1)) {
         // Implementa la logica per il comando STOR
-
+         printf("-----SONO LOGGATO------\n"); //test
 
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
