@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include <sys/wait.h>
 
 #define BUFFER_SIZE 1024
 #define PORT 50000
@@ -32,13 +33,13 @@ int ricercaClientSocketUser(struct USER array[], int lunghezza, int fd);
 
 int main() {
     int serverSocket; //PI socket
-    int dataSocket; //socket for DTP 
+    int dataSocket; //socket for DTP
 
     int fd_command_sockets[FD_SETSIZE]; //contain the command fd of clients
     int fd_data_sockets;
 
     fd_set command_fd, data_fd; //set for read and write of select.h lib
-    int max_command_sockets, max_data_sockets; //the max fd 
+    int max_command_sockets, max_data_sockets; //the max fd
 
     char buffer[BUFFER_SIZE];
 
@@ -75,7 +76,7 @@ int main() {
         exit(1);
     }
 
-    // Set up server address of PI 
+    // Set up server address of PI
     struct sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
@@ -99,14 +100,14 @@ int main() {
 
     max_command_sockets = serverSocket; //the max fd value choose by the select
     fd_command_sockets[max_command_sockets] = 1;
-     
+
 
     /* Initialize client sockets array,
      can handle up to maxClients */
     for (int i = 0; i < max_command_sockets; ++i) {
 
         //initilize the all the fd to 0, so no socket are associated to the array
-        fd_command_sockets[i] = 0; 
+        fd_command_sockets[i] = 0;
     }
 
 
@@ -115,7 +116,7 @@ int main() {
         FD_ZERO(&command_fd);  //initialize the fd set for the read and the write
         FD_SET(serverSocket, &command_fd); //add the serverSocket to the read set
 
-       
+
         // Add client sockets to the set
         for (int i = 0; i < max_command_sockets; ++i) {
             //store in clientSocket the value of clientSocket's array
@@ -123,10 +124,10 @@ int main() {
 
             //if clientSocket is associated to the array fd_command_sockets
             if (clientSocket > 0) {
-                //add the clientSocket in command_fd and 
-                FD_SET(clientSocket, &command_fd); 
+                //add the clientSocket in command_fd and
+                FD_SET(clientSocket, &command_fd);
             }
-            
+
             //update the max value of clientSocket
             if (clientSocket > max_command_sockets) {
                 max_command_sockets = clientSocket;
@@ -165,7 +166,7 @@ int main() {
             int clientSocket = fd_command_sockets[i]; //the clientSocket that use the service
 
             //if clientSocket is occuped
-            if (clientSocket > 0) {     
+            if (clientSocket > 0) {
                 //if clientSocket is ready for read and write
                 if (FD_ISSET(clientSocket, &command_fd)) {
 
@@ -178,15 +179,17 @@ int main() {
                     ssize_t bytesRead = receiveCommand(clientSocket, buffer);
                     //aggiunta terminatore stringa
                     buffer[bytesRead] = '\0';
-                    printf("Contenuto del buffer ricevuto: %s\n", buffer); 
+                    printf("Contenuto del buffer ricevuto: %s\n", buffer);
 
 
                     if (bytesRead < 0) { //error
+
                         perror("Errore durante la ricezione dei dati");
+
                     } else if (bytesRead == 0) { //if not recv byte from the reading
                         // close the client
                         printf("Client disconnesso\n");
-                        
+
                         // Remove the client socket from the set
                         FD_CLR(clientSocket, &command_fd);
 
@@ -194,15 +197,39 @@ int main() {
                         fd_command_sockets[i] = 0;
 
                         close(clientSocket);
-                    } else { 
 
+                    } else {
+                        
+
+                        // la richiesta viene elaborata in modo concorrente
+                        pid_t pid = fork();
+
+                        if (pid == -1) {
+
+                            perror("Error forking process");
+                            exit(1);
+
+                        }else if (pid > 0){
+
+                            //parent process
+                            int status;
+                            //aspetta che il processo figlio finisca
+                            waitpid(pid, &status, 0);
+
+                            if WIFEXITED(status);
+                            printf("Child process exited with status %d\n", WEXITSTATUS(status));
+
+                        }else{
                             
+                            //processo figlio
+                           
                             char *command;
-                            
                             //printf("elaborazione richiesta\n");
                             command = serverPI(buffer, dataSocket, clientSocket);
                             memset(buffer, 0, sizeof(buffer));
-                            //write(clientSocket,command, strlen(command))  
+                            exit(0);
+                            
+                        }
 
                     }
                 }
@@ -225,7 +252,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
     char command_word[20]; //comando inserito dall'utente es : retr
     char arg[20];// argomento del comando  es: nomefile.text
 
-    
+
     printf("il comando ricevuto è: %s\n", command);
     //divide il command dell'utente in due stringhe, command_word e arg;
     sscanf(command,"%s" "%s",command_word, arg);
@@ -236,7 +263,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
     if ((strncmp(command_word, "user", 4) == 0)) {
         // Implementa la logica per il comando USER
 
-        
+
 
         // Listen for incoming connections on PI socket
         if (listen(dataSocket, BACKLOG) < 0 ) {
@@ -267,17 +294,17 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
             pUser->log_state = 1;
 
             write(newDataSocket, welcome_message, strlen(welcome_message));
-            
+
         }else if(find == -1){
             printf("utente non trovato\n");
             char *not_found = "user non trovato\n";
             write(newDataSocket, not_found, strlen(not_found));
-            
+
         }
 
         close(newDataSocket);
-      
-     
+
+
 
         code_str = "331";
     } else if (strncmp(command_word, "pass", 4) == 0) {
@@ -306,11 +333,11 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
 
          char* test="nome_file\n";
          write(newDataSocket, test, strlen(test));
-        
+
         //chiusura data socket
          close(newDataSocket);
          printf("ho chiuso la data port\n");
-        
+
         code_str = "150";
     } else if (strncmp(command_word, "stor", 4) == 0) {
         // Implementa la logica per il comando STOR
@@ -343,11 +370,11 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
 
          char* test="comando non riconosciuto\n";
          write(newDataSocket, test, strlen(test));
-        
+
         //chiusura data socket
          close(newDataSocket);
          printf("ho chiuso la data port\n");
-         
+
         code_str = "500";
     }
 
@@ -373,7 +400,7 @@ ssize_t receiveCommand(int sockfd, char buffer[BUFFER_SIZE]) {
 int ricercaNomeUser(struct USER array[], int lunghezza,  char *arg) {
     for (int i = 0; i < lunghezza; i++) {
         if (strcmp(array[i].name, arg) == 0) {
-            
+
             return i; // Nome trovato, restituisce l'indice
         }
     }
