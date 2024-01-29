@@ -390,7 +390,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
 
 
         code_str = "150";
-    } else if ((strncmp(command_word, "list", 4) == 0) && (is_logged == 1) && (is_anon == 0)) {
+    } else if ((strncmp(command_word, "list", 4) == 0) && (is_logged == 1)) {
         // Implementa la logica per il comando LIST
 
     
