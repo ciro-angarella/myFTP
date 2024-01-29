@@ -5,23 +5,30 @@
 #include <arpa/inet.h>
 #include <sys/select.h>
 #include <sys/wait.h>
+#include <signal.h>
+
 
 #define BUFFER_SIZE 1024
 #define PORT 50000
 #define DATA_PORT 50001
 #define BACKLOG 4
+#define MAX_USER 4
+
 
 struct USER{
     char name[20];
     char pass[20];
     int log_state; //0 unlog, 1 logged
     int clientSocket;
+    int finded;
 };
 
-struct USER registred_user[3] = {
-                 {"enzo", "insalata", 0, -1},
-                 {"ciro", "marika", 0, -1} ,
-                 {"camilla", "FTP", 0, -1}
+
+struct USER registered_user[MAX_USER] = {
+                 {"enzo", "insalata", 0, -1, 0},
+                 {"ciro", "marika", 0, -1, 0} ,
+                 {"camilla", "FTP", 0, -1, 0},
+                 {"", "", 0, -1, 0}
                  };
 
 
@@ -29,9 +36,11 @@ struct USER registred_user[3] = {
 char* serverPI(char* command, int dataSocket, int clientSocket) ;
 ssize_t receiveCommand(int sockfd, char *buffer);
 int ricercaNomeUser(struct USER array[], int lunghezza,  char *arg);
-int ricercaClientSocketUser(struct USER array[], int lunghezza, int fd);
+int ricercaFdUser(struct USER array[], int lunghezza,  int fd);
+
 
 int main() {
+
     int serverSocket; //PI socket
     int dataSocket; //socket for DTP
 
@@ -62,13 +71,13 @@ int main() {
         perror("Error binding data socket");
         exit(1);
     }
-/*
+
     // Listen for incoming connections on PI socket
     if (listen(dataSocket, BACKLOG) < 0 ) {
         perror("Error listening for data  connections");
         exit(1);
     }
-*/
+
 //----------------------PI SOCKET--------------------------------------
     // Create the PI socket
     if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
@@ -109,7 +118,6 @@ int main() {
         //initilize the all the fd to 0, so no socket are associated to the array
         fd_command_sockets[i] = 0;
     }
-
 
     //---------------------------- main loop--------------------------------------
     while (1) {
@@ -198,40 +206,17 @@ int main() {
 
                         close(clientSocket);
 
-                    } else {
-                        
-
-                        // la richiesta viene elaborata in modo concorrente
-                        pid_t pid = fork();
-
-                        if (pid == -1) {
-
-                            perror("Error forking process");
-                            exit(1);
-
-                        }else if (pid > 0){
-
-                            //parent process
-                            int status;
-                            //aspetta che il processo figlio finisca
-                            waitpid(pid, &status, 0);
-
-                            if WIFEXITED(status);
-                            printf("Child process exited with status %d\n", WEXITSTATUS(status));
-
-                        }else{
-                            
-                            //processo figlio
+                    }else{
                            
-                            char *command;
-                            //printf("elaborazione richiesta\n");
-                            command = serverPI(buffer, dataSocket, clientSocket);
-                            memset(buffer, 0, sizeof(buffer));
-                            exit(0);
+                        char *command;
+                        //printf("elaborazione richiesta\n");
+                        command = serverPI(buffer, dataSocket, clientSocket);
+                        memset(buffer, 0, sizeof(buffer));
+                        
                             
                         }
 
-                    }
+                    
                 }
             }
         }
@@ -248,6 +233,20 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
     char* code_str = NULL;  // Inizializzazione a NULL di default
     char* data_port_value = "50001";
 
+    //restitusce l'indice dove è conservata la struttura dell'utente
+    int user_index = ricercaFdUser(registered_user,MAX_USER, clientSocket);
+    
+    int is_logged = 0;
+
+    if(registered_user[user_index].log_state == 1){
+        is_logged = 1;
+    }
+
+    int is_anon = 0;
+
+    if(strcmp(registered_user[user_index].name, "") == 0){
+        is_anon = 1;
+    }
 
     char command_word[20]; //comando inserito dall'utente es : retr
     char arg[20];// argomento del comando  es: nomefile.text
@@ -259,17 +258,10 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
     printf("comando: %s, arg: %s\n", command_word, arg);
 
 
+
     // Utilizza uno statement switch per gestire i comandi
     if ((strncmp(command_word, "user", 4) == 0)) {
-        // Implementa la logica per il comando USER
-
-
-
-        // Listen for incoming connections on PI socket
-        if (listen(dataSocket, BACKLOG) < 0 ) {
-            perror("Error listening for data  connections");
-            exit(1);
-        }
+        
 
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
@@ -281,44 +273,72 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
             exit(1);
         }
 
-        int find = ricercaNomeUser(registred_user, 3, arg);
+        int find = ricercaNomeUser(registered_user, MAX_USER, arg);
 
         if(find > -1){
             printf("utente trovato\n");
-            // cast del find
-            struct USER *pUser = &registred_user[find];
 
-            char *welcome_message = "Welcome in myFTP\n";
+            registered_user[find].clientSocket = clientSocket;
+            registered_user[find].finded =1;
 
-            pUser->clientSocket = clientSocket;
-            pUser->log_state = 1;
+            char *user_founded ="utente trovato, usa il cmd pass\n";
+            write(newDataSocket, user_founded , strlen(user_founded));
+           
 
-            write(newDataSocket, welcome_message, strlen(welcome_message));
 
         }else if(find == -1){
             printf("utente non trovato\n");
             char *not_found = "user non trovato\n";
             write(newDataSocket, not_found, strlen(not_found));
+            
 
         }
 
         close(newDataSocket);
-
-
-
+       
         code_str = "331";
     } else if (strncmp(command_word, "pass", 4) == 0) {
-        // Implementa la logica per il comando PASS
-        code_str = "230";
-    } else if (strncmp(command_word, "retr", 4) == 0) {
-        // Implementa la logica per il comando RETR
 
-        // Listen for incoming connections on PI socket
-        if (listen(dataSocket, BACKLOG) < 0 ) {
-            perror("Error listening for data  connections");
+        if(user_index < 0){
+            close(clientSocket);
+    }
+        
+
+        //manda il numero di porta al client
+        write(clientSocket, data_port_value, strlen(data_port_value));
+
+        //accepet della connessione
+        int newDataSocket;
+        if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
+            perror("Error accepting connection to data socket\n");
             exit(1);
         }
-        printf("ho aperto la data port\n");
+
+        int find = ricercaFdUser(registered_user, MAX_USER, clientSocket);
+        printf("%s è stato trovato\n" ,registered_user[find].name);
+
+        if((strcmp(registered_user[find].pass, arg) == 0 ) && (registered_user[find].finded == 1)){
+            printf("%s è entrato\n" ,registered_user[find].name);
+            struct USER *pUser = &registered_user[find];
+            pUser->log_state = 1;
+
+            char user_logged[BUFFER_SIZE];
+            sprintf(user_logged, "Welcome in my FTP %s\n", registered_user[find].name);
+
+            write(newDataSocket, user_logged , strlen(user_logged));
+        }else{
+            
+            close(clientSocket);
+        }
+
+        close(newDataSocket);
+
+        code_str = "230";
+    } else if ((strncmp(command_word, "retr", 4) == 0)&&(is_logged == 1)) {
+        // Implementa la logica per il comando RETR
+
+
+        
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
 
@@ -331,21 +351,70 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
 
         //trasferimento file...
 
-         char* test="nome_file\n";
-         write(newDataSocket, test, strlen(test));
+        /*
+        cami qui devi fare l'upload del file
+        da server a client
+        */
 
         //chiusura data socket
          close(newDataSocket);
-         printf("ho chiuso la data port\n");
+         
 
         code_str = "150";
-    } else if (strncmp(command_word, "stor", 4) == 0) {
+    } else if ((strncmp(command_word, "stor", 4)== 0) &&(is_logged == 1) && (is_anon == 0) ) {
         // Implementa la logica per il comando STOR
+
+
+        //manda il numero di porta al client
+        write(clientSocket, data_port_value, strlen(data_port_value));
+
+        //accepet della connessione
+        int newDataSocket;
+        if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
+            perror("Error accepting connection to data socket");
+            exit(1);
+        }
+
+        //trasferimento file...
+
+        /*
+        cami qui devi fare il download del file
+        dal client al server
+        */
+
+
+
+        //chiusura data socket
+         close(newDataSocket);
+         
+
+
         code_str = "150";
-    } else if (strncmp(command_word, "list", 4) == 0) {
+    } else if ((strncmp(command_word, "list", 4) == 0) && (is_logged == 1) && (is_anon == 0)) {
         // Implementa la logica per il comando LIST
+
+    
+
+        //manda il numero di porta al client
+        write(clientSocket, data_port_value, strlen(data_port_value));
+
+        //accepet della connessione
+        int newDataSocket;
+        if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
+            perror("Error accepting connection to data socket");
+            exit(1);
+        }
+
+        //cami implementa qui la list
+
+
+        //chiusura data socket
+         close(newDataSocket);
+
+
+
         code_str = "150";
-    } else if (strncmp(command_word, "quit", 4) == 0) {
+    } else if (strncmp(command_word, "quit", 4) == 0 && (is_logged == 1)) {
         // Implementa la logica per il comando QUIT
         code_str = "221";
     } else {
@@ -366,7 +435,6 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
             exit(1);
         }
 
-        //trasferimento file...
 
          char* test="comando non riconosciuto\n";
          write(newDataSocket, test, strlen(test));
@@ -401,6 +469,17 @@ int ricercaNomeUser(struct USER array[], int lunghezza,  char *arg) {
     for (int i = 0; i < lunghezza; i++) {
         if (strcmp(array[i].name, arg) == 0) {
 
+            return i; // Nome trovato, restituisce l'indice
+        }
+    }
+
+    return -1; // Nome non trovato
+}
+
+int ricercaFdUser(struct USER array[], int lunghezza,  int fd) {
+    for (int i = 0; i < lunghezza; i++) {
+        if (array[i].clientSocket == fd) {
+            //printf("ho trovato %s con find state %d", array[i].name, array[i].finded);
             return i; // Nome trovato, restituisce l'indice
         }
     }

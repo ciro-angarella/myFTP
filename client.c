@@ -35,7 +35,7 @@ int main() {
 
     // Ciclo di comunicazione con il server
     while (1) {
-        printf("Inserisci una stringa da inviare al server (exit per terminare): ");
+        printf("Inserisci una stringa da inviare al server (exit per terminare):\n> ");
         char command_buffer[BUFFER_SIZE];
         fgets(command_buffer, BUFFER_SIZE, stdin);
 
@@ -88,7 +88,7 @@ int main() {
         memset(data_buffer, 0, sizeof(data_buffer));
         
         //chiusura data socket
-        close(dataSocket);
+        //close(dataSocket);
 
 
     }
