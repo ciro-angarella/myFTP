@@ -14,28 +14,33 @@
 #define BACKLOG 4
 #define MAX_USER 3
 
-
+/** 
+ * @struct USER 
+ * @brief questa è la struttura di un utente nel programma.
+ *        quando un client tenta di accedere utilizzando 
+ *        il comando "user", il suo fd viene associato
+ *        alla propia struttura se trovata. 
+*/
 struct USER{
     char name[20];
     char pass[20];
     int log_state; //0 unlog, 1 logged
     int clientSocket;
-    int finded;
 };
 
 
 struct USER registered_user[MAX_USER] = {
-                 {"enzo", "insalata", 0, -1, 0},
-                 {"ciro", "marika", 0, -1, 0} ,
-                 {"camilla", "FTP", 0, -1, 0},
+                 {"enzo", "insalata", 0, -1},
+                 {"ciro", "marika", 0, -1 },
+                 {"camilla", "FTP", 0, -1},
                  };
 
 
 
 char* serverPI(char* command, int dataSocket, int clientSocket) ;
 ssize_t receiveCommand(int sockfd, char *buffer);
-int ricercaNomeUser(struct USER array[], int lunghezza,  char *arg);
-int ricercaFdUser(struct USER array[], int lunghezza,  int fd);
+int ricercaPerNome(struct USER array[], int lunghezza,  char *arg);
+int ricercaPerFd(struct USER array[], int lunghezza,  int fd);
 
 
 int main() {
@@ -233,7 +238,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
     char* data_port_value = "50001";
 
     //restitusce l'indice dove è conservata la struttura dell'utente, se non la trova restituisce -1
-    int user_index = ricercaFdUser(registered_user,MAX_USER, clientSocket);
+    int user_index = ricercaPerFd(registered_user,MAX_USER, clientSocket);
     
     int is_logged = 0;
 
@@ -256,7 +261,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
 
 
     // Utilizza uno statement switch per gestire i comandi
-    if ((strncmp(command_word, "user", 4) == 0)&&(is_logged == 0)) {
+    if ((strncmp(command_word, "user", 4) == 0)&&(is_logged == 0)){
         
 
         //manda il numero di porta al client
@@ -269,18 +274,25 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
             exit(1);
         }
 
-        int find = ricercaNomeUser(registered_user, MAX_USER, arg);
+        int find = ricercaPerNome(registered_user, MAX_USER, arg);
 
-        if(find > -1){
+        if((find > -1) && (registered_user[find].clientSocket == -1)){ //se l'utente è trovato e non ha gia un fd assegnato
             printf("utente trovato\n");
 
             registered_user[find].clientSocket = clientSocket;
-            registered_user[find].finded =1;
+            //registered_user[find].finded =1;
 
             char *user_founded ="utente trovato, usa il cmd pass\n";
             write(newDataSocket, user_founded , strlen(user_founded));
            
 
+        }else if((find > -1) && (registered_user[find].clientSocket != -1)){
+
+        printf("utente gia assegnato\n");
+
+            
+            char *user_ass ="utente gia loggato\n";
+            write(newDataSocket, user_ass , strlen(user_ass));
 
         }else if(find == -1){
             printf("utente non trovato\n");
@@ -293,14 +305,8 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
         close(newDataSocket);
        
         code_str = "331";
-    } else if ((strncmp(command_word, "pass", 4)== 0 )&& (registered_user[user_index].finded == 1 ) && (is_logged == 0)) {
+    } else if ((strncmp(command_word, "pass", 4)== 0 )&& (registered_user[user_index].clientSocket == clientSocket) && (is_logged == 0)) {
         
-        /*
-        
-                if(user_index < 0){
-            close(clientSocket);
-        }
-        */
 
 
         //manda il numero di porta al client
@@ -313,11 +319,11 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
             exit(1);
         }
 
-        //int find = ricercaFdUser(registered_user, MAX_USER, clientSocket); non serve ma non toccare
+        //int find = ricercaPerFd(registered_user, MAX_USER, clientSocket); non serve ma non toccare
         printf("%s è stato trovato\n" ,registered_user[user_index].name);
 
         //confronto pass
-        if((strcmp(registered_user[user_index].pass, arg) == 0 ) && (registered_user[user_index].finded == 1)){
+        if(((strcmp(registered_user[user_index].pass, arg) == 0) && (registered_user[user_index].clientSocket == clientSocket ))){
             printf("%s è entrato\n" ,registered_user[user_index].name);
             struct USER *pUser = &registered_user[user_index];
             pUser->log_state = 1;
@@ -326,6 +332,14 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
             sprintf(user_logged, "Welcome in my FTP %s\n", registered_user[user_index].name);
 
             write(newDataSocket, user_logged , strlen(user_logged));
+        }
+        else if(registered_user[user_index].clientSocket != clientSocket){
+
+            char *user_ass = "user gia loggato\n";
+
+            write(newDataSocket, user_ass , strlen(user_ass));
+            close(newDataSocket);
+
         }else{
 
             char *worng_pass = "pass errata, riprova\n";
@@ -419,6 +433,10 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
         code_str = "150";
     } else if (strncmp(command_word, "quit", 4) == 0 && (is_logged == 1)) {
         // Implementa la logica per il comando QUIT
+
+
+
+
         code_str = "221";
     } else {
         // Comando non riconosciuto
@@ -468,7 +486,7 @@ ssize_t receiveCommand(int sockfd, char buffer[BUFFER_SIZE]) {
 
 }
 
-int ricercaNomeUser(struct USER array[], int lunghezza,  char *arg) {
+int ricercaPerNome(struct USER array[], int lunghezza,  char *arg) {
     for (int i = 0; i < lunghezza; i++) {
         if (strcmp(array[i].name, arg) == 0) {
 
@@ -479,7 +497,7 @@ int ricercaNomeUser(struct USER array[], int lunghezza,  char *arg) {
     return -1; // Nome non trovato
 }
 
-int ricercaFdUser(struct USER array[], int lunghezza,  int fd) {
+int ricercaPerFd(struct USER array[], int lunghezza,  int fd) {
     for (int i = 0; i < lunghezza; i++) {
         if (array[i].clientSocket == fd) {
             //printf("ho trovato %s con find state %d", array[i].name, array[i].finded);
