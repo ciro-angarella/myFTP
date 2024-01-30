@@ -37,7 +37,7 @@ struct USER registered_user[MAX_USER] = {
 
 
 
-char* serverPI(char* command, int dataSocket, int clientSocket) ;
+char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fd,int fd_command_sockets[], int i) ;
 ssize_t receiveCommand(int sockfd, char *buffer);
 int ricercaPerNome(struct USER array[], int lunghezza,  char *arg);
 int ricercaPerFd(struct USER array[], int lunghezza,  int fd);
@@ -198,27 +198,14 @@ int main() {
 
                         perror("Errore durante la ricezione dei dati");
 
-                    } else if (bytesRead == 0) { //if not recv byte from the reading
-                        // close the client
-                        printf("Client disconnesso\n");
-
-                        // Remove the client socket from the set
-                        FD_CLR(clientSocket, &command_fd);
-
-                        // Reset the client socket in the array to 0
-                        fd_command_sockets[i] = 0;
-
-                        close(clientSocket);
-
                     }else{
                            
                         char *command;
                         //printf("elaborazione richiesta\n");
-                        command = serverPI(buffer, dataSocket, clientSocket);
+                        command = serverPI(buffer, dataSocket, clientSocket, command_fd, fd_command_sockets, i);
                         memset(buffer, 0, sizeof(buffer));
                         
-                            
-                        }
+                    }
 
                     
                 }
@@ -233,7 +220,7 @@ int main() {
 
 
 //----------------------SERVER PI----------------------
-char* serverPI(char* command, int dataSocket, int clientSocket) {
+char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fd,int fd_command_sockets[], int i) {
     char* code_str = NULL;  // Inizializzazione a NULL di default
     char* data_port_value = "50001";
 
@@ -432,9 +419,19 @@ char* serverPI(char* command, int dataSocket, int clientSocket) {
 
         code_str = "150";
     } else if (strncmp(command_word, "quit", 4) == 0 && (is_logged == 1)) {
-        // Implementa la logica per il comando QUIT
 
+        // close the client
+        registered_user[user_index].clientSocket = -1;
+        registered_user[user_index].log_state = 0;
 
+        
+        // Remove the client socket from the set
+        FD_CLR(clientSocket, &command_fd); 
+        // Reset the client socket in the array to 0
+        fd_command_sockets[i] = 0;
+
+        close(clientSocket);
+        printf("Client disconnesso\n");
 
 
         code_str = "221";

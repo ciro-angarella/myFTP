@@ -45,11 +45,17 @@ int main() {
         //invio comandi al server
         sendCommand(clientSocket, command_buffer);
         //printf("ho mandato: %s", command_buffer);
+
+        if(strcmp(command_buffer,"quit")==0){
+            close(clientSocket);
+        }
+
         memset(command_buffer, 0, sizeof(command_buffer));
 
         //riceve la porta sulla quale collegarsi per il data transfer
         char port_responsed[BUFFER_SIZE];
         receiveResponse(clientSocket, port_responsed, sizeof(port_responsed)-1);
+
 
         if (strlen(port_responsed) != 0){
             // Stampa la porta data dal server
