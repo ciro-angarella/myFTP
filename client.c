@@ -5,10 +5,10 @@
 #include <arpa/inet.h>
 
 #define PORT 50000
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 2048
 
 void sendCommand(int sockfd,  char *command);
-void receiveResponse(int sockfd, char *buffer, size_t buffer_size);
+ssize_t fullread(int fd, char *buf, size_t count);
 
 int main() {
     int clientSocket, dataSocket;
@@ -43,18 +43,20 @@ int main() {
         command_buffer[strcspn(command_buffer, "\n")] = '\0';
 
         //invio comandi al server
-        sendCommand(clientSocket, command_buffer);
+       write(clientSocket, command_buffer, strlen(command_buffer));
         //printf("ho mandato: %s", command_buffer);
 
         if(strcmp(command_buffer,"quit")==0){
             close(clientSocket);
+            exit(1);
         }
 
         memset(command_buffer, 0, sizeof(command_buffer));
 
         //riceve la porta sulla quale collegarsi per il data transfer
         char port_responsed[BUFFER_SIZE];
-        receiveResponse(clientSocket, port_responsed, sizeof(port_responsed)-1);
+        //printf("aspetto la porta DTP\n");
+        read(clientSocket, port_responsed, BUFFER_SIZE-1);
 
 
         if (strlen(port_responsed) != 0){
@@ -88,7 +90,8 @@ int main() {
 
             //riceve file
             char data_buffer[BUFFER_SIZE];
-            receiveResponse(dataSocket,data_buffer, sizeof(data_buffer)-1);
+            read(dataSocket, data_buffer, BUFFER_SIZE-1);
+            data_buffer[BUFFER_SIZE] = '\0';
 
             printf("%s\n", data_buffer);
             memset(data_buffer, 0, sizeof(data_buffer));
@@ -105,30 +108,6 @@ int main() {
     return 0;
 }
 
-//-------------------CLIENT PI FUNC----------------------
 
 
-
-void sendCommand(int sockfd, char *command) {
-    // Invia il comando al server
-    if ( write(sockfd, command, strlen(command)) < 0) {
-        perror("Errore nell'invio del comando\n");
-        exit(1);
-    }
-
-}
-
-void receiveResponse(int sockfd, char *buffer, size_t buffer_size) {
-    memset(buffer, 0, buffer_size);
-
-    // Ricevi la risposta dal server
-    ssize_t bytesRead = read(sockfd, buffer, buffer_size - 1);
-    if (bytesRead < 0) {
-        perror("Errore nella ricezione della risposta\n");
-        exit(1);
-    }
-
-    // terminatore del buffer
-    buffer[bytesRead] = '\0';
-}
 
