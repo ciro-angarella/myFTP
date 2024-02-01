@@ -1,3 +1,16 @@
+/**
+ * @file server.c
+ * @author Camilla Cacace (you@domain.com)
+ * @author Ciro Angarella (ciro.angarella001@studenti.uniparthenope.it)
+ * @author Vincenzo Terracciano (you@domain.com)
+ * @brief   
+ * @version 0.1
+ * @date 2024-02-01
+ * 
+ * @copyright Copyright (c) 2024
+ * 
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,58 +22,47 @@
 #include <dirent.h>
 
 
-#define BUFFER_SIZE 2048
+#define BUFFER_SIZE 1024
 #define PORT 50000
 #define DATA_PORT 50001
 #define BACKLOG 4
 #define MAX_USER 3
 
-/** @section USER STRUCT
- *  @struct USER 
- *  @brief questa è la struttura di un utente nel programma.Gli utenti sono registrati hardcoded 
- *         all'interno del server.
- *          
+/** 
+ * @struct USER
+ * @brief Rappresenta la struttura di un utente nel programma.
  * 
- * @param name Il nome dell'utente,può contenere venti caratteri ed  è il parametro che viene 
- *        cercarto con il comando "user".
- * 
- * @param pass Password del profilo,può contenere venti caratteri ed è il parametro  che viene 
- *             cercarto con il comando "pass".
- * 
- * @param log_state Valore booleano che rappresenta lo stato di log dell'utente. Quando l'user 
- *                  si scollega questo flag viene abbassato al suo valore
- *                  di unlogged ( 0 ).
- * 
- * @param clienSocket Al momento della ricerca del nome dell'utente, viene assegnato l'fd  del 
- *                    processo a questa variabile, collegando quindi uno specifico client a 
- *                    uno specifico user. Quando il client si scollega questa risorsa  viene 
- *                    messsa sul suo valore di default ( -1 ).
- * 
- * @param directoryPath stringa che contiene il path della directoty dell'utente.
-*/
+ * @details Quando un nuovo client si connette al server, il suo fd non viene assocciato a nessun user ed è
+ * considerato quindi come un user anonimo.Quando immette il comando "user" il sup fd viene associato al nome 
+ * inserito e quando effettua l'accesso con il comando "pass" lo stato dell'user diventa loggato. Al momento dell'uso
+ * del comando "quit" il suo fd e il suo log_state vengono riportati ai valori di default: 0 per log_state e -1 per clientSocket.
+ */
 struct USER{
-    char name[20];
-    char pass[20];
-    int log_state;
-    int clientSocket;
-    char *directoryPath;
+    char name[20]; /**< Il nome dell'utente. Può contenere venti caratteri ed è il parametro cercato con il comando "user". */
+    char pass[20]; /**< La password del profilo. Può contenere venti caratteri ed è il parametro cercato con il comando "pass". */
+    int log_state; /**< Valore booleano che rappresenta lo stato di login dell'utente. */
+    int clientSocket; /**< fd del processo associato all'utente. */
+    char *directoryPath; /**< Stringa che contiene il percorso della directory dell'utente. */
+    char rename_from[BUFFER_SIZE];
 };
 
-/** 
- * @section REGISTERED_USER
- * @brief Questa è la struttura hardcoded all'interno del server, contiene gli utenti registrati
- *        al servizio. Questo server permette anche la connessione e utilizzo del servizio a utenti 
- *        non registrati, utilizzando il servizio in modo anonimo non effettuando l'acessso. Questo
- *        programma non utlizza un'utente fittizzio anonimo. 
+
+/**  
+ * @brief Questa è la struttura degli user registrati hardcoded all'interno del server.
+ * 
+ * @details Questa struttura contiene gli utenti registrati
+ *          al servizio. Questo server permette anche la connessione e utilizzo del servizio a utenti 
+ *          non registrati, utilizzando il servizio in modo anonimo non effettuando l'acessso. Questo
+ *          programma non utlizza un'utente fittizzio anonimo. 
 */
 struct USER registered_user[MAX_USER] = {
-                 {"enzo", "insalata", 0, -1,"/home/angalinux/Desktop/FTPpath/enzo"},
-                 {"ciro", "marika", 0, -1, "/home/angalinux/Desktop/FTPpath/ciro"},
-                 {"camilla", "FTP", 0, -1, "/home/angalinux/Desktop/FTPpath/camilla"},
+                 {"enzo", "insalata", 0, -1,"/home/angalinux/Desktop/FTPpath/enzo", ""},
+                 {"ciro", "marika", 0, -1, "/home/angalinux/Desktop/FTPpath/ciro", ""},
+                 {"camilla", "FTP", 0, -1, "/home/angalinux/Desktop/FTPpath/camilla", ""},
                  };
 
 
-char *anonDir = "/home/angalinux/Desktop/FTPpath/anon";
+char *anonDir = "/home/angalinux/Desktop/FTPpath/anon"; /**< directory per tutti gli utenti anonimi */
 
 char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fds,int fd_clients_sockets[], int i) ;
 int ricercaPerNome(struct USER array[], int lunghezza,  char *arg);
@@ -145,7 +147,6 @@ int main() {
 
     /**
      * @brief inizializza a 0 gli indici di fd_clients_sockets 
-     * 
      * questo ciclo for inizializza come non impegnati a fd gli indici di fd_clients_sockets,
      * escludendo l'indice di serverSocket. 
      * 
@@ -246,8 +247,9 @@ int main() {
         /**
          * @brief Verifica la presenza di dati da leggere sui socket dei client.
          *
-         * Questo ciclo for verifica ogni descrittore di file nei client sockets
-         * per determinare se è pronto per la lettura del comando.
+         * Questo ciclo for verifica ogni descrittore di file in fd_client_sockets
+         * per determinare se è pronto per la lettura del comando, se questo è pronto esegue
+         * la richiesta del client.
          *
          * @param max_client_fd Il valore massimo possibile per un descrittore di file di un client.
          * @param fd_clients_sockets Array dei descrittori di file dei client.
@@ -280,9 +282,10 @@ int main() {
 
                         //esecuizione della richiesta
 
-                        char *DPI_response_code; //buffer per la ricezione dei codici del DTP
+                        char *DPI_response_code; /**< buffer per la ricezione dei codici del */
                         //printf("elaborazione richiesta\n");
                         DPI_response_code = serverPI(buffer, dataSocket, clientSocket, command_fds, fd_clients_sockets, i);
+                        //pulizia buffer di servizio
                         memset(buffer, 0, sizeof(buffer));
                         
                     }
@@ -299,15 +302,35 @@ int main() {
 
 
 
-//----------------------SERVER PI----------------------
+//------------------------------------------------SERVER PI-----------------------------------------------------
+
+/**
+ * @brief Gestisce i comandi inviati dal client attraverso la connessione di controllo.
+ *
+ * Questa funzione interpreta e gestisce i comandi inviati dal client attraverso la connessione
+ * di controllo. Esegue operazioni specifiche in base al comando ricevuto, interagendo con il
+ * client attraverso la connessione di dati (DTP) quando necessario.
+ *
+ * @param command       La stringa contenente il comando inviato dal client.
+ * @param dataSocket    Il descrittore di file associato alla connessione di dati (DTP).
+ * @param clientSocket  Il descrittore di file associato alla connessione di controllo del client.
+ * @param command_fds   L'insieme di descrittori di file associati ai comandi dei client.
+ * @param fd_clients_sockets Array dei descrittori di file dei client.
+ * @param i             L'indice corrente nell'array dei descrittori di file dei client.
+ *
+ * @return Una stringa contenente il codice di risposta da inviare al client dopo l'esecuzione del comando.
+ *         Può essere utilizzato per indicare il successo o il fallimento dell'operazione.
+ */
 char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fds,int fd_clients_sockets[], int i) {
     char* code_str = NULL;  // Inizializzazione a NULL di default
     char* data_port_value = "50001"; /**< stringa contenente il nuemero di porta del DTP */
 
-    //restitusce l'indice dove è conservata la struttura dell'utente, se non la trova restituisce -1
-    int user_index = ricercaPerFd(registered_user,MAX_USER, clientSocket);
     
-    int is_logged = 0;
+    int user_index; /**< user_index contiene l'indice dell'user in registered_user, il valore -1 di user_index significa che l'fd che sta eseguendo il server è un utente anonimo */
+    //restitusce l'indice dove è conservata la struttura dell'utente, se non la trova restituisce -1
+    user_index = ricercaPerFd(registered_user,MAX_USER, clientSocket); 
+    
+    int is_logged; /**< variabile di stato che assume il valore 1 se l'fd servito è assocciato ad un user (loggato), altrimenti il suo valore sarà 0 (anonimo)*/ 
 
     if(user_index == -1){
         is_logged = 0;
@@ -315,20 +338,33 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
     } else if(registered_user[user_index].log_state == 1){
         is_logged = 1;
     }
-    printf("is logged value : %d\n", is_logged);
-    char command_word[20]; //comando inserito dall'utente es : retr
-    char arg[20];// argomento del comando  es: nomefile.text
 
+    printf("is logged value : %d\n", is_logged);
+    char command_word[20]; /**< comando inserito dall'utente es : retr, stor */
+    char arg[20]; /**< argomento del comando  es: nomefile.text */
 
     printf("il comando ricevuto è: %s\n", command);
-    //divide il command dell'utente in due stringhe, command_word e arg;
+    
+    /**
+     * @brief divisione della stringa command
+     * 
+     * quando l'untente inserisce un comando da terminale es: "dele file.txt", quest'ultimo viene
+     * salvato interamente in nella stringa command. La funzione sscanf() divide la stringa command in due 
+     * stringhe : "command_word" per i comandi registrati all'interno del DPI e "arg" che contiene l'argomento
+     * del comando. Esempio : l'utente invia al server "dele file.txt", quindi command sarà uguale a "dele file.txt",
+     * dopo l'esecuzione dell'istruzione sscanf() command assumerà il valore di "dele" e arg "file.txt".
+     * 
+     * @param command stringa contenente il comando e il suo argomento inviato dal client.
+     * @param command_word stringa contenente il comando interpetrabile dal DPI
+     * @param arg stringa contenente l'argomento, il soggeto del comando.
+     * 
+     */
     sscanf(command,"%s" "%s",command_word, arg);
     printf("comando: %s, arg: %s\n", command_word, arg);
 
+    //-------------------------------------CONTROLLO DEI COMANDI----------------------------------------------------------------
 
-
-    // Utilizza uno statement switch per gestire i comandi
-    if ((strncmp(command_word, "user", 4) == 0)&&(is_logged == 0)){
+    if ((strncmp(command_word, "user", 4) == 0)&&(is_logged == 0)){ // se l'utente non è gia loggato
         
 
         //manda il numero di porta al client
@@ -342,41 +378,44 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
             exit(1);
         }
 
-        int find = ricercaPerNome(registered_user, MAX_USER, arg);
+        int find; /**< assume come valore l'indice dell'user dell'fd assocciato, il suo valore è -1 se è un utente anonimo*/
+
+        //controlla che l'nome (arg) inserito dall'untente esista tra gli utenti registrati 
+        find = ricercaPerNome(registered_user, MAX_USER, arg);
 
         if((find > -1) && (registered_user[find].clientSocket == -1)){ //se l'utente è trovato e non ha gia un fd assegnato
             printf("utente trovato\n");
 
+            //gli viene aasegnato un fd
             registered_user[find].clientSocket = clientSocket;
-            //registered_user[find].finded =1;
-
+            
+            //invia la risposta al client
             char *user_founded ="utente trovato, usa il cmd pass";
             write(newDataSocket, user_founded , strlen(user_founded));
            
 
-        }else if((find > -1) && (registered_user[find].clientSocket != -1)){
+        }else if((find > -1) && (registered_user[find].clientSocket != -1)){ //se l'utente è già loggato
 
-        printf("utente gia assegnato\n");
-
-            
+            printf("utente gia assegnato\n");
+             //invia la risposta al client
             char *user_ass ="utente gia loggato\n";
             write(newDataSocket, user_ass , strlen(user_ass));
 
-        }else if(find == -1){
+        }else if(find == -1){ //se l'utente non è stato trovato
             printf("utente non trovato\n");
+            //invia la risposta al client
             char *not_found = "user non trovato\n";
             write(newDataSocket, not_found, strlen(not_found));
             
-
         }
 
+        //chiusura della socket del DTP
         close(newDataSocket);
        
         code_str = "331";
-    } else if ((strncmp(command_word, "pass", 4)== 0 )&& (registered_user[user_index].clientSocket == clientSocket) && (is_logged == 0)) {
+        //se l'fd che sta usando il servizio è stato connesso ad un user e non è loggato 
+    } else if ((strncmp(command_word, "pass", 4)== 0 ) && (registered_user[user_index].clientSocket == clientSocket) && (is_logged == 0)) {
         
-
-
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
 
@@ -387,43 +426,45 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
             exit(1);
         }
 
-        //int find = ricercaPerFd(registered_user, MAX_USER, clientSocket); non serve ma non toccare
+        
         printf("%s è stato trovato\n" ,registered_user[user_index].name);
 
-        //confronto pass
+        //viene confrontata la pass dell'user con arg (pass inviata dall'client) e se client che richiede il servizio ha lo stesso fd asseggnato da user
         if(((strcmp(registered_user[user_index].pass, arg) == 0) && (registered_user[user_index].clientSocket == clientSocket ))){
+
             printf("%s è entrato\n" ,registered_user[user_index].name);
+            //cast alla struttura
             struct USER *pUser = &registered_user[user_index];
             pUser->log_state = 1;
 
+            //invio della risposta
             char user_logged[BUFFER_SIZE];
             sprintf(user_logged, "Welcome in my FTP %s\n", registered_user[user_index].name);
 
             write(newDataSocket, user_logged , strlen(user_logged));
-        }
-        else if(registered_user[user_index].clientSocket != clientSocket){
 
-            char *user_ass = "user gia loggato\n";
-
+        }//se l'fd non è lo stesso significa che client cercano di accedere allo stesso user
+        else if(registered_user[user_index].clientSocket != clientSocket){ 
+            
+            //invio della risposta
+            char *user_ass = "user già loggato";
             write(newDataSocket, user_ass , strlen(user_ass));
+
             close(newDataSocket);
 
-        }else{
+        }else{ //errore pass sbagliata
 
             char *worng_pass = "pass errata, riprova\n";
-
             write(newDataSocket, worng_pass , strlen(worng_pass));
+
             close(newDataSocket);
         }
 
+        //chiusura del data socket
         close(newDataSocket);
 
         code_str = "230";
     } else if ((strncmp(command_word, "retr", 4) == 0)) {
-        // Implementa la logica per il comando RETR
-
-       
-        
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
 
@@ -447,7 +488,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
 
         code_str = "150";
     } else if ((strncmp(command_word, "stor", 4)== 0) &&(is_logged == 1)) {
-        // Implementa la logica per il comando STOR
+        
          printf("-----SONO LOGGATO------\n"); //test
 
         //manda il numero di porta al client
@@ -475,7 +516,45 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
 
 
         code_str = "150";
-    } else if ((strncmp(command_word, "list", 4) == 0)) {
+    } else if(strncmp(command_word, "rnfr", 4) == 0 && (is_logged == 1)){
+       
+
+        //manda il numero di porta al client
+        write(clientSocket, data_port_value, strlen(data_port_value));
+
+        //accepet della connessione
+        int newDataSocket;
+        if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 )    
+        {
+            perror("Error accepting connection to data socket");
+            exit(1);
+        }
+
+        char path_da_rn[BUFFER_SIZE];
+        memset(path_da_rn, 0, sizeof(path_da_rn));
+        printf("ho pulito\n");
+        snprintf(path_da_rn, sizeof(path_da_rn), "%s/%s", registered_user[user_index].directoryPath, arg);
+        printf("ho unito i path: %s\n",path_da_rn);
+
+
+        if ((access(path_da_rn, F_OK) != -1)&&(strlen(path_da_rn) < sizeof(registered_user[user_index].rename_from))) {
+
+            // Copia la stringa nel campo rename_from
+            strcpy(registered_user[user_index].rename_from, path_da_rn);
+            printf("percorso copiato: %s\n", registered_user[user_index].rename_from);
+            
+            char *rnfr_succ = "150 File found\n";
+            write(newDataSocket, rnfr_succ, strlen(rnfr_succ));
+
+        }else {
+            // File doesn't exist
+            char *rnfr_fail = "550 File not found\n";
+            write(newDataSocket, rnfr_fail, strlen(rnfr_fail));    
+        }
+    close(newDataSocket);
+
+       
+}else if ((strncmp(command_word, "list", 4) == 0)) {
        
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
@@ -506,17 +585,19 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
         code_str = "150";
     } else if (strncmp(command_word, "quit", 4) == 0) {
 
-        // close the client
+        //se l'fd asseggnato non è su default
         if(user_index > -1){
+            // resetta le variabili dell'user a default
             registered_user[user_index].clientSocket = -1;
             registered_user[user_index].log_state = 0;
         }
 
-        // Remove the client socket from the set
+        // rimuove l'fd dall'insieme degli fds
             FD_CLR(clientSocket, &command_fds); 
-            // Reset the client socket in the array to 0
+            // la sua posizione in fd_clients viene liberata 
             fd_clients_sockets[i] = 0;
 
+            //chiusura del client
             close(clientSocket);
             printf("Client disconnesso\n");
 
@@ -528,7 +609,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
     //manda il numero di porta al client
     write(clientSocket, data_port_value, strlen(data_port_value));
 
-    //accepet della connessione
+    //accept della connessione
     int newDataSocket;
     if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
         perror("Error accepting connection to data socket\n");
@@ -536,14 +617,31 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
     }
 
 
-    char filePath[2048];
-    memset(filePath,0, sizeof(filePath));
-    snprintf(filePath, sizeof(filePath), "%s/%s", registered_user[user_index].directoryPath, arg);
+    char filePath[2048]; //**< usato per contenere il filepath colleggato all'utente concatentano al nome del file (arg) */
+    memset(filePath,0, sizeof(filePath)); //pulizia del del filepath
 
-    int result = remove(filePath);
+    /**
+     * @brief concatenameneto del nome del file (arg) al filepath dell'utente per eliminare il file arg
+     *
+     * @param filePath path completo del file da eliminare
+     * 
+     * @param sizeof(filePath) dimensione della stringa del path completo
+     * 
+     * @param registered_user[user_index].directoryPath path predefinita dell'utente, ricavata dal suo indice
+     * 
+     * @param arg nome del file da eliminare 
+     * 
+     */
+    snprintf(filePath, sizeof(filePath), "%s/%s", registered_user[user_index].directoryPath, arg);
+    
+    int file_removed; /**< flag che conferma l'eliminazione del file, 0 se eliminazione andata a buon fine altrimenti il suo valore è 1 */
+
+    //rimozione del file 
+    file_removed = remove(filePath);
+
     printf("%s\n",filePath);
 
-    if (result == 0) {
+    if (file_removed == 0) {
         // Eliminazione riuscita
         char *dele_success = "150 File eliminato con successo\n";
         write(newDataSocket, dele_success, strlen(dele_success));
@@ -559,11 +657,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
 
 } else {
         // Comando non riconosciuto
-        // Listen for incoming connections on PI socket
-        if (listen(dataSocket, BACKLOG) < 0 ) {
-            perror("Error listening for data  connections");
-            exit(1);
-        }
+       
         printf("ho aperto la data port\n");
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
@@ -575,9 +669,8 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
             exit(1);
         }
 
-
-         char* test="comando non riconosciuto\n";
-         write(newDataSocket, test, strlen(test));
+         char* cmd_not_found="comando non riconosciuto\n";
+         write(newDataSocket, cmd_not_found, strlen(cmd_not_found));
 
         //chiusura data socket
          close(newDataSocket);
@@ -589,6 +682,18 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
     return code_str;
 }
 
+/**
+ * @brief Ricerca un utente in un array per nome.
+ *
+ * Questa funzione cerca un utente all'interno di un array di utenti in base al nome
+ * tramite una ricerca sequenziale.
+ *
+ * @param array      L'array di utenti in cui effettuare la ricerca.
+ * @param lunghezza  La lunghezza dell'array di utenti.
+ * @param arg        Il nome da cercare.
+ *
+ * @return           Restituisce l'indice dell'utente se trovato, altrimenti restituisce -1.
+ */
 int ricercaPerNome(struct USER array[], int lunghezza,  char *arg) {
     for (int i = 0; i < lunghezza; i++) {
         if (strcmp(array[i].name, arg) == 0) {
@@ -600,6 +705,17 @@ int ricercaPerNome(struct USER array[], int lunghezza,  char *arg) {
     return -1; // Nome non trovato
 }
 
+/**
+ * @brief Ricerca un utente in un array per descrittore di file (fd).
+ *
+ * Questa funzione cerca un utente all'interno di un array di utenti in base al descrittore di file.
+ *
+ * @param array      L'array di utenti in cui effettuare la ricerca.
+ * @param lunghezza  La lunghezza dell'array di utenti.
+ * @param fd         Il descrittore di file da cercare.
+ *
+ * @return           Restituisce l'indice dell'utente se trovato, altrimenti restituisce -1.
+ */
 int ricercaPerFd(struct USER array[], int lunghezza,  int fd) {
     for (int i = 0; i < lunghezza; i++) {
         if (array[i].clientSocket == fd) {
@@ -610,7 +726,20 @@ int ricercaPerFd(struct USER array[], int lunghezza,  int fd) {
 
     return -1; // Nome non trovato
 }
+/**
+ * @brief Contiene la definizione della funzione per inviare la lista dei file.
+ */
 
+/**
+ * @brief Invia la lista dei file presenti in una directory attraverso un socket.
+ *
+ * Questa funzione apre la directory specificata, legge la lista dei file escludendo "." e "..",
+ * e invia la lista come una singola stringa attraverso il socket fornito.
+ *
+ * @param dataSocket     Il socket per l'invio della lista dei file.
+ * @param clientSocket   Il socket del client associato.
+ * @param directoryPath  Il percorso della directory da cui ottenere la lista dei file.
+ */
 void sendFileList(int dataSocket, int clientSocket, const char *directoryPath) {
     DIR *dir;
         struct dirent *entry;

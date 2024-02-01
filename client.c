@@ -7,9 +7,17 @@
 #define PORT 50000
 #define BUFFER_SIZE 2048
 
-void sendCommand(int sockfd,  char *command);
-ssize_t fullread(int fd, char *buf, size_t count);
 
+
+
+/**
+ * @brief Funzione principale del programma client.
+ *
+ * La funzione crea un socket, si connette a un server remoto, e poi avvia un ciclo di comunicazione
+ * interattiva con il server. Per ogni iterazione del ciclo, il client invia una stringa al server e
+ * riceve la porta sulla quale deve collegarsi per il data transfer. Successivamente, crea un data socket
+ * e si connette al server su tale porta per ricevere dati.
+ */
 int main() {
     int clientSocket, dataSocket;
     struct sockaddr_in serverAddr, dataAddr;
