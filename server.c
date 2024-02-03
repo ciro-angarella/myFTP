@@ -2,8 +2,18 @@
  * @file server.c
  * @author Camilla Cacace (you@domain.com)
  * @author Ciro Angarella (ciro.angarella001@studenti.uniparthenope.it)
- * @author Vincenzo Terracciano (you@domain.com)
- * @brief   
+ * @author Vincenzo Terracciano (vincenzo.terracciano003@studenti.uniparthenope.it)
+ * 
+ * @brief  dettagli implementativi server
+ * 
+ * il server implementato gestisce le richieste degli utenti utilizzando il multiplex attraverso la funzione select(),
+ * così da poter monitorare contemporaneamnete più descrittori di diversi client. L'implemetazione del server FTP avviene 
+ * attraverso l'uso di due porte, "PORT" dove arrivano le richeiste al servizio dei client e la porta "DATA_PORT" per il trasferimento 
+ * dei file e dei dati di output. Dopo che il multiplex verifica il fd del client da servire, legge il la stringa inviata dal client 
+ * e la inserisce nella funzione DPI che ne interpetrerà i comandi. Il DPI intepetrato il comando, eseguirà le funzioni del DTP necessarie
+ * per stabilere una connesione sulla DATA_PORT e inviare il relativo output.
+ * 
+ * 
  * @version 0.1
  * @date 2024-02-01
  * 
@@ -43,7 +53,7 @@ struct USER{
     int log_state; /**< Valore booleano che rappresenta lo stato di login dell'utente. */
     int clientSocket; /**< fd del processo associato all'utente. */
     char *directoryPath; /**< Stringa che contiene il percorso della directory dell'utente. */
-    char rename_from[BUFFER_SIZE];
+    char rename_from[BUFFER_SIZE]; /**< variabile usata per salvare il path del file che si vuole rinominare */
 };
 
 
@@ -68,6 +78,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
 int ricercaPerNome(struct USER array[], int lunghezza,  char *arg);
 int ricercaPerFd(struct USER array[], int lunghezza,  int fd);
 void sendFileList(int dataSocket, int clientSocket, const char *directoryPath);
+void receive_file_data(int socket, FILE *file);
 
 
 int main() {
@@ -489,29 +500,38 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
         code_str = "150";
     } else if ((strncmp(command_word, "stor", 4)== 0) &&(is_logged == 1)) {
         
-         printf("-----SONO LOGGATO------\n"); //test
+    // Manda il numero di porta al client
+    write(clientSocket, data_port_value, strlen(data_port_value));
 
-        //manda il numero di porta al client
-        write(clientSocket, data_port_value, strlen(data_port_value));
+    // Accept della connessione
+    int newDataSocket;
+    if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0) {
+        perror("Error accepting connection to data socket");
+        exit(1);
+    }
 
-        //accepet della connessione
-        int newDataSocket;
-        if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
-            perror("Error accepting connection to data socket");
-            exit(1);
-        }
+    // Estrai il percorso del file dall'argomento del comando
+    char file_path[BUFFER_SIZE];
+    memset(file_path, 0, sizeof(file_path));
+    snprintf(file_path, sizeof(file_path), "%s/%s", registered_user[user_index].directoryPath, arg);
+    printf("Ho unito i path: %s\n", file_path);
 
-        //trasferimento file...
+    // Apri il file con il percorso specificato
+    FILE *file_to_receive = fopen(file_path, "w");
+    if (file_to_receive != NULL) {
+        // Ricevi dati e scrivi nel file
+        receive_file_data(newDataSocket, file_to_receive);
+        fclose(file_to_receive);
 
-        /*
-        cami qui devi fare il download del file
-        dal client al server
-        */
+        char *stor_succ = "226 File stored\n";
+        write(clientSocket, stor_succ, strlen(stor_succ));
+    } else {
+        // Errore durante l'apertura del file
+        char *stor_fail = "550 Error opening file for storing\n";
+        write(clientSocket, stor_fail, strlen(stor_fail));
+    }
 
-
-
-        //chiusura data socket
-         close(newDataSocket);
+    close(newDataSocket);
          
 
 
@@ -530,30 +550,61 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
             exit(1);
         }
 
-        char path_da_rn[BUFFER_SIZE];
-        memset(path_da_rn, 0, sizeof(path_da_rn));
-        printf("ho pulito\n");
-        snprintf(path_da_rn, sizeof(path_da_rn), "%s/%s", registered_user[user_index].directoryPath, arg);
-        printf("ho unito i path: %s\n",path_da_rn);
+        char rnfr_str[BUFFER_SIZE]; /**< contiene il path completo del file da rinominare */
+        //pulizia della stringa rnfr_str
+        memset(rnfr_str, 0, sizeof(rnfr_str));
 
-
-        if ((access(path_da_rn, F_OK) != -1)&&(strlen(path_da_rn) < sizeof(registered_user[user_index].rename_from))) {
+        //unione del path della directory dell'utente e del nome del file da rinominare (arg)
+        snprintf(rnfr_str, sizeof(rnfr_str), "%s/%s", registered_user[user_index].directoryPath, arg);
+       
+        //se il file esiste e la dimensione dei path è corretta
+        if ((access(rnfr_str, F_OK) != -1) && (strlen(rnfr_str) < sizeof(registered_user[user_index].rename_from))) {
 
             // Copia la stringa nel campo rename_from
-            strcpy(registered_user[user_index].rename_from, path_da_rn);
-            printf("percorso copiato: %s\n", registered_user[user_index].rename_from);
+            strcpy(registered_user[user_index].rename_from, rnfr_str);
             
+            //invia il codice di successo al client
             char *rnfr_succ = "150 File found\n";
             write(newDataSocket, rnfr_succ, strlen(rnfr_succ));
 
         }else {
-            // File doesn't exist
+            // invia codice errore
             char *rnfr_fail = "550 File not found\n";
             write(newDataSocket, rnfr_fail, strlen(rnfr_fail));    
         }
+    //chiusura socket
     close(newDataSocket);
 
        
+}else if (strncmp(command_word, "rnto", 4) == 0 && is_logged == 1){
+
+        //manda il numero di porta al client
+        write(clientSocket, data_port_value, strlen(data_port_value));
+
+        //accepet della connessione
+        int newDataSocket;
+        if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 ){
+            perror("Error accepting connection to data socket");
+            exit(1);
+        }
+
+        char path_da_rn[BUFFER_SIZE];
+        memset(path_da_rn, 0, sizeof(path_da_rn));
+        snprintf(path_da_rn, sizeof(path_da_rn), "%s/%s", registered_user[user_index].directoryPath, arg);
+
+        if (rename(registered_user[user_index].rename_from, path_da_rn) == 0) {
+        // Rinominazione riuscita
+        char *rnto_success = "150 File rinominato con successo\n";
+        write(newDataSocket, rnto_success, strlen(rnto_success));
+        
+        } else {
+        // Rinominazione fallita
+        char *rnto_fail = "550 Errore durante la rinominazione del file\n";
+        write(newDataSocket, rnto_fail, strlen(rnto_fail));
+        }
+
+    close(newDataSocket);
+
 }else if ((strncmp(command_word, "list", 4) == 0)) {
        
         //manda il numero di porta al client
@@ -620,18 +671,8 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
     char filePath[2048]; //**< usato per contenere il filepath colleggato all'utente concatentano al nome del file (arg) */
     memset(filePath,0, sizeof(filePath)); //pulizia del del filepath
 
-    /**
-     * @brief concatenameneto del nome del file (arg) al filepath dell'utente per eliminare il file arg
-     *
-     * @param filePath path completo del file da eliminare
-     * 
-     * @param sizeof(filePath) dimensione della stringa del path completo
-     * 
-     * @param registered_user[user_index].directoryPath path predefinita dell'utente, ricavata dal suo indice
-     * 
-     * @param arg nome del file da eliminare 
-     * 
-     */
+   
+    //unione del path della directory dell'utente e del nome del file da eliminare (arg)
     snprintf(filePath, sizeof(filePath), "%s/%s", registered_user[user_index].directoryPath, arg);
     
     int file_removed; /**< flag che conferma l'eliminazione del file, 0 se eliminazione andata a buon fine altrimenti il suo valore è 1 */
@@ -658,7 +699,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
 } else {
         // Comando non riconosciuto
        
-        printf("ho aperto la data port\n");
+        
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
 
@@ -674,8 +715,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
 
         //chiusura data socket
          close(newDataSocket);
-         printf("ho chiuso la data port\n");
-
+        
         code_str = "500";
     }
 
@@ -769,4 +809,18 @@ void sendFileList(int dataSocket, int clientSocket, const char *directoryPath) {
 
         // Chiudi la directory
         closedir(dir);
+}
+
+void receive_file_data(int socket, FILE *file) {
+    char buffer[BUFFER_SIZE];
+    ssize_t bytesRead;
+
+    // Leggi i dati dal client e scrivili nel file
+    while ((bytesRead = read(socket, buffer, sizeof(buffer))) > 0) {
+        fwrite(buffer, 1, bytesRead, file);
+    }
+
+    if (bytesRead < 0) {
+        perror("Errore durante la lettura dei dati dal socket");
+    }
 }

@@ -1,3 +1,23 @@
+/**
+ * @file client.c
+ * @author Camilla Cacace (you@domain.com)
+ * @author Ciro Angarella (ciro.angarella001@studenti.uniparthenope.it)
+ * @author Vincenzo Terracciano (vincenzo.terracciano003@studenti.uniparthenope.it)
+ * 
+ * @brief  dettagli implementativi server
+ * 
+ * 
+ * 
+ * 
+ * @version 0.1
+ * @date 2024-02-01
+ * 
+ * @copyright Copyright (c) 2024
+ * 
+ */
+
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,9 +26,7 @@
 
 #define PORT 50000
 #define BUFFER_SIZE 2048
-
-
-
+int setupAndConnectDataSocket(char* port_responsed);
 
 /**
  * @brief Funzione principale del programma client.
@@ -50,53 +68,30 @@ int main() {
         // Rimuovi il newline inserito da fgets
         command_buffer[strcspn(command_buffer, "\n")] = '\0';
 
-        //invio comandi al server
-       write(clientSocket, command_buffer, strlen(command_buffer));
-        //printf("ho mandato: %s", command_buffer);
+        char command_word[10]; /**< comando inserito dall'utente es : retr, stor */
+        char arg[100]; /**< argomento del comando  es: nomefile.text */
 
-        if(strcmp(command_buffer,"quit")==0){
+        sscanf(command_buffer,"%s" "%s",command_word, arg);
+
+        if(strcmp(command_word,"quit")==0){
+
             close(clientSocket);
             exit(1);
-        }
 
-        memset(command_buffer, 0, sizeof(command_buffer));
+        }else if(strcmp(command_word, "list")==0){
+            //invio comandi al server
+            write(clientSocket, command_buffer, strlen(command_buffer));
 
-        //riceve la porta sulla quale collegarsi per il data transfer
-        char port_responsed[BUFFER_SIZE];
-        //printf("aspetto la porta DTP\n");
-        read(clientSocket, port_responsed, BUFFER_SIZE-1);
+            memset(command_buffer, 0, sizeof(command_buffer));
 
+            //riceve la porta sulla quale collegarsi per il data transfer
+            char port_responsed[BUFFER_SIZE];
+            
+            read(clientSocket, port_responsed, BUFFER_SIZE-1);
 
-        if (strlen(port_responsed) != 0){
-            // Stampa la porta data dal server
-            printf("la porta del data transfer è :%s\n", port_responsed);
+            dataSocket = setupAndConnectDataSocket(port_responsed);
 
-            //setup data port
-            int data_port = atoi(port_responsed);
-        
-            //creazione data socket
-            dataSocket = socket(AF_INET, SOCK_STREAM, 0);
-
-            if (dataSocket < 0) {
-                perror("Errore nella creazione del data socket");
-                exit(1);
-            }
-
-            // Configurazione dell'indirizzo del server per il data trasnfer
-            dataAddr.sin_family = AF_INET;
-            dataAddr.sin_port = htons(data_port);
-            dataAddr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Indirizzo IP del server
-
-            memset(port_responsed, 0, sizeof(port_responsed));
-
-            // Connessione al server
-            if (connect(dataSocket, (struct sockaddr*)&dataAddr, sizeof(dataAddr)) < 0) {
-                perror("Errore nella connessione al data port");
-                close(dataSocket);
-                exit(1);
-            }
-
-            //riceve file
+            //riceve la risposta
             char data_buffer[BUFFER_SIZE];
             read(dataSocket, data_buffer, BUFFER_SIZE-1);
             data_buffer[BUFFER_SIZE] = '\0';
@@ -106,7 +101,182 @@ int main() {
             
             //chiusura data socket
             close(dataSocket);
+            
+
+        }else if(strcmp(command_word, "stor")==0){
+            // invio comando, solo la command word
+            write(clientSocket, command_word, strlen(command_buffer));
+
+            memset(command_buffer, 0, sizeof(command_buffer));
+        
+            //riceve la porta sulla quale collegarsi per il data transfer
+            char port_responsed[BUFFER_SIZE];
+            
+            read(clientSocket, port_responsed, BUFFER_SIZE-1);
+
+            dataSocket = setupAndConnectDataSocket(port_responsed);
+
+            //invia il file (arg), full write del file (usa arg, non command_buffer)
+
+            //se vuoi fagli leggere la risposta
+
+        }else if(strcmp(command_word, "retr")==0){
+            //invio comandi al server
+            write(clientSocket, command_buffer, strlen(command_buffer));
+
+            memset(command_buffer, 0, sizeof(command_buffer));
+
+            //riceve la porta sulla quale collegarsi per il data transfer
+            char port_responsed[BUFFER_SIZE];
+       
+            read(clientSocket, port_responsed, BUFFER_SIZE-1);
+
+            dataSocket = setupAndConnectDataSocket(port_responsed);
+
+            //implementazione full read del file CAMI
+
+            //se vuoi fagli leggere la risposta
+
+
+            
+            
+        }else if(strcmp(command_word, "rnfr")==0){
+            //invio comandi al server
+            write(clientSocket, command_buffer, strlen(command_buffer));
+
+            memset(command_buffer, 0, sizeof(command_buffer));
+
+            //riceve la porta sulla quale collegarsi per il data transfer
+            char port_responsed[BUFFER_SIZE];
+            
+            read(clientSocket, port_responsed, BUFFER_SIZE-1);
+
+            dataSocket = setupAndConnectDataSocket(port_responsed);
+
+            //riceve la risposta
+            char data_buffer[BUFFER_SIZE];
+            read(dataSocket, data_buffer, BUFFER_SIZE-1);
+            data_buffer[BUFFER_SIZE] = '\0';
+
+            printf("%s\n", data_buffer);
+            memset(data_buffer, 0, sizeof(data_buffer));
+            
+            //chiusura data socket
+            close(dataSocket);
+            
+            
+        }else if(strcmp(command_word, "rnto")==0){
+            //invio comandi al server
+            write(clientSocket, command_buffer, strlen(command_buffer));
+
+            memset(command_buffer, 0, sizeof(command_buffer));
+
+            //riceve la porta sulla quale collegarsi per il data transfer
+            char port_responsed[BUFFER_SIZE];
+            
+            read(clientSocket, port_responsed, BUFFER_SIZE-1);
+
+            dataSocket = setupAndConnectDataSocket(port_responsed);
+
+            //riceve la risposta
+            char data_buffer[BUFFER_SIZE];
+            read(dataSocket, data_buffer, BUFFER_SIZE-1);
+            data_buffer[BUFFER_SIZE] = '\0';
+
+            printf("%s\n", data_buffer);
+            memset(data_buffer, 0, sizeof(data_buffer));
+            
+            //chiusura data socket
+            close(dataSocket);
+            
+            
+        }else if(strcmp(command_word, "user")==0){
+            //invio comandi al server
+            write(clientSocket, command_buffer, strlen(command_buffer));
+
+            memset(command_buffer, 0, sizeof(command_buffer));
+
+            //riceve la porta sulla quale collegarsi per il data transfer
+            char port_responsed[BUFFER_SIZE];
+            
+            read(clientSocket, port_responsed, BUFFER_SIZE-1);
+
+            dataSocket = setupAndConnectDataSocket(port_responsed);
+
+            //riceve la risposta
+            char data_buffer[BUFFER_SIZE];
+            read(dataSocket, data_buffer, BUFFER_SIZE-1);
+            data_buffer[BUFFER_SIZE] = '\0';
+
+            printf("%s\n", data_buffer);
+            memset(data_buffer, 0, sizeof(data_buffer));
+            
+            //chiusura data socket
+            close(dataSocket);
+            
+            
+        }else if(strcmp(command_word, "pass")==0){
+            //invio comandi al server
+            write(clientSocket, command_buffer, strlen(command_buffer));
+
+            memset(command_buffer, 0, sizeof(command_buffer));
+
+            //riceve la porta sulla quale collegarsi per il data transfer
+            char port_responsed[BUFFER_SIZE];
+            
+            read(clientSocket, port_responsed, BUFFER_SIZE-1);
+
+            dataSocket = setupAndConnectDataSocket(port_responsed);
+
+            //riceve la risposta
+            char data_buffer[BUFFER_SIZE];
+            read(dataSocket, data_buffer, BUFFER_SIZE-1);
+            data_buffer[BUFFER_SIZE] = '\0';
+
+            printf("%s\n", data_buffer);
+            memset(data_buffer, 0, sizeof(data_buffer));
+            
+            //chiusura data socket
+            close(dataSocket);
+            
+            
+        }else{
+
+            //invio comandi al server
+            write(clientSocket, command_buffer, strlen(command_buffer));
+
+            memset(command_buffer, 0, sizeof(command_buffer));
+
+            //riceve la porta sulla quale collegarsi per il data transfer
+            char port_responsed[BUFFER_SIZE];
+            
+            read(clientSocket, port_responsed, BUFFER_SIZE-1);
+
+            dataSocket = setupAndConnectDataSocket(port_responsed);
+
+            //riceve la risposta
+            char data_buffer[BUFFER_SIZE];
+            read(dataSocket, data_buffer, BUFFER_SIZE-1);
+            data_buffer[BUFFER_SIZE] = '\0';
+
+            printf("%s\n", data_buffer);
+            memset(data_buffer, 0, sizeof(data_buffer));
+            
+            //chiusura data socket
+            close(dataSocket);
+
+
+
+
         }
+
+
+
+
+        
+/*----------------------------------------------------------------------------------------------*/
+
+        
 
     }
 
@@ -116,6 +286,35 @@ int main() {
     return 0;
 }
 
+int setupAndConnectDataSocket(char* port_responsed) {
+    // Setup del data port
+    int data_port = atoi(port_responsed);
 
+    // Creazione del data socket
+    int dataSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (dataSocket < 0) {
+        perror("Errore nella creazione del data socket");
+        exit(1);
+    }
+
+    // Configurazione dell'indirizzo del server per il data trasfer
+    struct sockaddr_in dataAddr;
+    dataAddr.sin_family = AF_INET;
+    dataAddr.sin_port = htons(data_port);
+    dataAddr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Indirizzo IP del server
+
+    memset(port_responsed, 0, sizeof(port_responsed));
+
+    // Connessione al server
+    if (connect(dataSocket, (struct sockaddr*)&dataAddr, sizeof(dataAddr)) < 0) {
+        perror("Errore nella connessione al data port");
+        close(dataSocket);
+        exit(1);
+    }
+
+    
+    return dataSocket;
+}
 
 
