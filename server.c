@@ -30,6 +30,9 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <dirent.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/sendfile.h>
 
 
 #define BUFFER_SIZE 1024
@@ -77,7 +80,7 @@ char *anonDir = "/home/angalinux/Desktop/FTPpath/anon"; /**< directory per tutti
 char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fds,int fd_clients_sockets[], int i) ;
 int ricercaPerNome(struct USER array[], int lunghezza,  char *arg);
 int ricercaPerFd(struct USER array[], int lunghezza,  int fd);
-void sendFileList(int dataSocket, int clientSocket, const char *directoryPath);
+void sendFileList(int dataSocket, char *directoryPath);
 void receive_file_data(int socket, FILE *file);
 
 
@@ -476,6 +479,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
 
         code_str = "230";
     } else if ((strncmp(command_word, "retr", 4) == 0)) {
+        
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
 
@@ -486,15 +490,32 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
             exit(1);
         }
 
-        //trasferimento file...
+        
+        char file_path[BUFFER_SIZE];
 
-        /*
-        cami qui devi fare l'upload del file
-        da server a client
-        */
+        //Se l'user non è anonimo
+        if (user_index > -1){
+            //usa il suo dir personale
+            snprintf(file_path, sizeof(file_path), "%s/%s", registered_user[user_index].directoryPath, arg);
+            printf("%s", file_path);
+        }else{
+            //alterimenti usa la dir anonima
+            snprintf(file_path, sizeof(file_path), "%s/%s", anonDir, arg);
+            printf("%s", file_path);
+        }
 
+
+        int file_fd = open(file_path, O_RDONLY);
+
+        off_t file_size = lseek(file_fd, 0, SEEK_END);
+        lseek(file_fd, 0, SEEK_SET);
+
+        //invio del file
+        sendfile(newDataSocket, file_fd, NULL, file_size);
+
+        close(file_fd);
         //chiusura data socket
-         close(newDataSocket);
+        close(newDataSocket);
          
 
         code_str = "150";
@@ -622,11 +643,11 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
         struct USER *currentUser = &registered_user[user_index];
 
         // Chiama la tua funzione per inviare i file al client
-        sendFileList(newDataSocket, clientSocket, currentUser->directoryPath);
+        sendFileList(newDataSocket, currentUser->directoryPath);
 
         } else if(user_index == -1){
         // Chiama la tua funzione per inviare i file al client
-        sendFileList(newDataSocket, clientSocket, anonDir);
+        sendFileList(newDataSocket, anonDir);
         }
         
         //chiusura data socket
@@ -649,9 +670,10 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
             fd_clients_sockets[i] = 0;
 
             //chiusura del client
-            close(clientSocket);
             printf("Client disconnesso\n");
 
+            close(clientSocket);
+           
         code_str = "221";
 
     } else if ((strncmp(command_word, "dele", 4) == 0) && (is_logged == 1)) {
@@ -780,7 +802,7 @@ int ricercaPerFd(struct USER array[], int lunghezza,  int fd) {
  * @param clientSocket   Il socket del client associato.
  * @param directoryPath  Il percorso della directory da cui ottenere la lista dei file.
  */
-void sendFileList(int dataSocket, int clientSocket, const char *directoryPath) {
+void sendFileList(int dataSocket, char *directoryPath) {
     DIR *dir;
         struct dirent *entry;
 

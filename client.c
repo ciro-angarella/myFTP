@@ -23,10 +23,15 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/sendfile.h>
 
 #define PORT 50000
 #define BUFFER_SIZE 2048
+
 int setupAndConnectDataSocket(char* port_responsed);
+ssize_t fullread(int fd, void *buffer, size_t n);
 
 /**
  * @brief Funzione principale del programma client.
@@ -74,6 +79,8 @@ int main() {
         sscanf(command_buffer,"%s" "%s",command_word, arg);
 
         if(strcmp(command_word,"quit")==0){
+            //invio comandi al server
+            write(clientSocket, command_buffer, strlen(command_buffer));
 
             close(clientSocket);
             exit(1);
@@ -128,18 +135,36 @@ int main() {
 
             //riceve la porta sulla quale collegarsi per il data transfer
             char port_responsed[BUFFER_SIZE];
-       
+
             read(clientSocket, port_responsed, BUFFER_SIZE-1);
 
             dataSocket = setupAndConnectDataSocket(port_responsed);
 
-            //implementazione full read del file CAMI
+            // Crea un nuovo file per salvare il contenuto ricevuto
+            int file_fd = open( arg, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 
-            //se vuoi fagli leggere la risposta
+            char file_buffer[BUFFER_SIZE];
+            ssize_t bytes_received;
+
+            //scrittura sul file con i byte ricevuti
+            while ((bytes_received = read(dataSocket, file_buffer, sizeof(file_buffer))) > 0) {
+                write(file_fd, file_buffer, bytes_received);
+            }
+
+            if (bytes_received == -1) {
+                perror("Error receiving file");
+
+            }else{
+                printf("250 file ricevuto\n");
+            }
+
+        close(file_fd);
+
+        memset(file_buffer,0, sizeof(file_buffer));
 
 
-            
-            
+        close(dataSocket);
+
         }else if(strcmp(command_word, "rnfr")==0){
             //invio comandi al server
             write(clientSocket, command_buffer, strlen(command_buffer));
@@ -265,19 +290,7 @@ int main() {
             //chiusura data socket
             close(dataSocket);
 
-
-
-
         }
-
-
-
-
-        
-/*----------------------------------------------------------------------------------------------*/
-
-        
-
     }
 
     // Chiudi il socket
@@ -317,4 +330,21 @@ int setupAndConnectDataSocket(char* port_responsed) {
     return dataSocket;
 }
 
+ssize_t fullread(int fd, void *buffer, size_t n) {
+    ssize_t bytesRead = 0;
+    ssize_t totalBytesRead = 0;
 
+    while ((bytesRead = read(fd, buffer + totalBytesRead, n - totalBytesRead)) > 0) {
+        totalBytesRead += bytesRead;
+        if (totalBytesRead == n) {
+            // Leggi tutto il necessario
+            break;
+        }
+    }
+
+    if (bytesRead < 0) {
+        perror("Errore nella lettura dal socket");
+    }
+
+    return totalBytesRead;
+}
