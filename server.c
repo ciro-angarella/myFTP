@@ -32,6 +32,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <sys/sendfile.h>
 
 
@@ -355,7 +356,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
 
     printf("is logged value : %d\n", is_logged);
     char command_word[20]; /**< comando inserito dall'utente es : retr, stor */
-    char arg[20]; /**< argomento del comando  es: nomefile.text */
+    char arg[BUFFER_SIZE]; /**< argomento del comando  es: nomefile.text */
 
     printf("il comando ricevuto è: %s\n", command);
     
@@ -532,28 +533,44 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
     }
 
     // Estrai il percorso del file dall'argomento del comando
-    char file_path[BUFFER_SIZE];
-    memset(file_path, 0, sizeof(file_path));
-    snprintf(file_path, sizeof(file_path), "%s/%s", registered_user[user_index].directoryPath, arg);
-    printf("Ho unito i path: %s\n", file_path);
+    char file_path_stor[BUFFER_SIZE];
+    memset(file_path_stor, 0, sizeof(file_path_stor));
 
-    // Apri il file con il percorso specificato
-    FILE *file_to_receive = fopen(file_path, "w");
-    if (file_to_receive != NULL) {
-        // Ricevi dati e scrivi nel file
-        receive_file_data(newDataSocket, file_to_receive);
-        fclose(file_to_receive);
-
-        char *stor_succ = "226 File stored\n";
-        write(clientSocket, stor_succ, strlen(stor_succ));
-    } else {
-        // Errore durante l'apertura del file
-        char *stor_fail = "550 Error opening file for storing\n";
-        write(clientSocket, stor_fail, strlen(stor_fail));
+    char *nome_file;
+    nome_file = basename(arg);
+    
+    snprintf(file_path_stor, sizeof(file_path_stor), "%s/%s", registered_user[user_index].directoryPath, nome_file);
+   
+    // Crea un nuovo file per salvare il contenuto ricevuto
+    int file_fd = open(file_path_stor, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (file_fd == -1) {
+    perror("Errore apertura file");
+    // Gestire l'errore in modo appropriato
     }
 
+    char file_buffer[BUFFER_SIZE];
+    ssize_t bytes_received;
+    size_t total_bytes_received = 0;
+
+    while ((bytes_received = read(newDataSocket, file_buffer, sizeof(file_buffer))) > 0) {
+    if (write(file_fd, file_buffer, bytes_received) != bytes_received) {
+        perror("Errore scrittura file");
+        // Gestire l'errore in modo appropriato
+    }
+    total_bytes_received += bytes_received;
+    }
+
+    if (bytes_received == -1) {
+    perror("Errore lettura socket");
+    // Gestire l'errore in modo appropriato
+    }
+
+    close(file_fd);
+    printf("Ricevuti %zu bytes\n", total_bytes_received);
+
+
+    //chiusura dtp socket
     close(newDataSocket);
-         
 
 
         code_str = "150";

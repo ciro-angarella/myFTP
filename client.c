@@ -112,7 +112,7 @@ int main() {
 
         }else if(strcmp(command_word, "stor")==0){
             // invio comando, solo la command word
-            write(clientSocket, command_word, strlen(command_buffer));
+            write(clientSocket, command_buffer, strlen(command_buffer));
 
             memset(command_buffer, 0, sizeof(command_buffer));
         
@@ -123,9 +123,41 @@ int main() {
 
             dataSocket = setupAndConnectDataSocket(port_responsed);
 
-            //invia il file (arg), full write del file (usa arg, non command_buffer)
+            int file_fd;
+            off_t file_size;
+            ssize_t bytes_written;
 
-            //se vuoi fagli leggere la risposta
+            // Apertura del file
+            file_fd = open(arg, O_RDONLY);
+            if (file_fd == -1) {
+                perror("Errore apertura file");
+                return EXIT_FAILURE;
+            }
+
+            // Calcolo della dimensione del file
+            file_size = lseek(file_fd, 0, SEEK_END);
+            if (file_size == -1) {
+                perror("Errore calcolo dimensione file");
+                close(file_fd);
+                return EXIT_FAILURE;
+            }
+            lseek(file_fd, 0, SEEK_SET);
+
+            // Invio del file
+            bytes_written = sendfile(dataSocket, file_fd, NULL, file_size);
+            if (bytes_written == -1) {
+                perror("Errore invio file");
+                close(file_fd);
+                return EXIT_FAILURE;
+            }
+
+            close(file_fd);
+
+            printf("\ninviati %zu bytes \n", bytes_written);
+
+            close(dataSocket);
+
+
 
         }else if(strcmp(command_word, "retr")==0){
             //invio comandi al server
@@ -150,6 +182,7 @@ int main() {
             while ((bytes_received = read(dataSocket, file_buffer, sizeof(file_buffer))) > 0) {
                 write(file_fd, file_buffer, bytes_received);
             }
+            close(file_fd);
 
             if (bytes_received == -1) {
                 perror("Error receiving file");
@@ -158,7 +191,7 @@ int main() {
                 printf("250 file ricevuto\n");
             }
 
-        close(file_fd);
+     
 
         memset(file_buffer,0, sizeof(file_buffer));
 
