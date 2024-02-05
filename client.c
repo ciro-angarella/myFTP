@@ -4,7 +4,7 @@
  * @author Ciro Angarella (ciro.angarella001@studenti.uniparthenope.it)
  * @author Vincenzo Terracciano (vincenzo.terracciano003@studenti.uniparthenope.it)
  * 
- * @brief  dettagli implementativi server
+ * @brief  dettagli implementativi server hola
  * 
  * 
  * 
@@ -15,7 +15,6 @@
  * @copyright Copyright (c) 2024
  * 
  */
-
 
 
 #include <stdio.h>
