@@ -20,7 +20,6 @@
  * @copyright Copyright (c) 2024
  * 
  */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,11 +35,11 @@
 #include <sys/sendfile.h>
 
 
-#define BUFFER_SIZE 1024
-#define PORT 50000
-#define DATA_PORT 50001
+#define BUFFER_SIZE 1024 /**< Dimensione massima usata dai buffer del server */
+#define PORT 50000 /**< Porta dove vengono connessi i client e dove arrivvano i comandi dell'utente */
+#define DATA_PORT 50001 /**< Porta dove vengono trasferiti gli output e usata per la trasmissione dei file tra server e client */
 #define BACKLOG 4
-#define MAX_USER 3
+#define MAX_USER 3 /**< Dimensione della struttura hardcoded che contiene gli user registrati */
 
 /** 
  * @struct USER
@@ -78,12 +77,10 @@ struct USER registered_user[MAX_USER] = {
 
 char *anonDir = "/home/angalinux/Desktop/FTPpath/anon"; /**< directory per tutti gli utenti anonimi */
 
-char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fds,int fd_clients_sockets[], int i) ;
+void serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fds,int fd_clients_sockets[], int i) ;
 int ricercaPerNome(struct USER array[], int lunghezza,  char *arg);
 int ricercaPerFd(struct USER array[], int lunghezza,  int fd);
 void sendFileList(int dataSocket, char *directoryPath);
-void receive_file_data(int socket, FILE *file);
-
 
 int main() {
 //---------------------------------VARIABILI PER LA GESTIONE DEL MULTIPLEX-----------------------------
@@ -106,7 +103,7 @@ int main() {
         exit(1);
     }
 
-    //setup dell'indirizzo della socket dei dati
+    //setup dell'indirizzo della socket dei dati DTP
     struct sockaddr_in dataAddr; /**< inidirzzo della socket dei dati */
     dataAddr.sin_family = AF_INET;
     dataAddr.sin_addr.s_addr = INADDR_ANY;
@@ -131,8 +128,8 @@ int main() {
         exit(1);
     }
 
-    
-    struct sockaddr_in serverAddr;  /**< inidirzzo della socket delle connessioni al server */
+    //setup della socket per le connessioni al PI
+    struct sockaddr_in serverAddr;  /**< indirizzo della socket delle connessioni al server e PI*/
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
     serverAddr.sin_port = htons(PORT);
@@ -153,45 +150,27 @@ int main() {
 
 //----------------------------------------------------------------------------------------------
 
-    
-    FD_SET(serverSocket, &command_fds); /**< per comodità d'uso aggiungiamo il socket del server al fds */
+    //per comodità d'uso aggiungiamo il socket del server al fds
+    FD_SET(serverSocket, &command_fds); 
 
     max_client_fd = serverSocket; /**< essendo il primo fd aggiunto, il serverSocket viene impostato come il valore massimo */
     fd_clients_sockets[max_client_fd] = 1; 
 
-
-    /**
-     * @brief inizializza a 0 gli indici di fd_clients_sockets 
-     * questo ciclo for inizializza come non impegnati a fd gli indici di fd_clients_sockets,
-     * escludendo l'indice di serverSocket. 
-     * 
-     * @details l'indice di serverSocket è max_client_fd fino a quando non vengono connessi client, se client
-     *          si connettono questo valore potrebbe cambiare. lo stato non_assegnato/assegnato è 0/1.
-     * 
-     * @param max_client_fd Il valore massimo possibile per un descrittore di file di un client.
-     * @param fd_clients_sockets Array dei descrittori di file dei client.
-     */
+    //inizializzazione degli indici a 0 (libero) a parte il l'indice del server che è settato a 1 (impegnato)
     for (int i = 0; i < max_client_fd; ++i) {
         fd_clients_sockets[i] = 0;
     }
 
     //---------------------------- main loop--------------------------------------
     while (1) {
-        FD_ZERO(&command_fds); /**< inizializzazione del fds */
-        FD_SET(serverSocket, &command_fds); /**< aggiungiamo il socket del server al fds */
+        //inizializzazione del fds
+        FD_ZERO(&command_fds);
+
+        //aggiungiamo il socket del server al fds
+        FD_SET(serverSocket, &command_fds);
 
 
-        /**
-         * @brief Inizializza l'insieme di descrittori di file per i client e aggiorna il valore massimo.
-         *
-         * Questo ciclo for scorre l'array di descrittori di file dei client (fd_clients_sockets)
-         * e per ciascun descrittore non vuoto, lo aggiunge all'insieme di descrittori di file command_fds.
-         * Inoltre, tiene traccia del valore massimo tra i descrittori di file dei client attivi.
-         *
-         * @param max_client_fd Il valore massimo possibile per un descrittore di file di un client.
-         * @param fd_clients_sockets Array dei descrittori di file dei client.
-         * @param command_fds Insieme di descrittori di file associati ai comandi dei client.
-         */
+        //aggiunge gli fd dei client al fd set
         for (int i = 0; i < max_client_fd; ++i) {
             //assegnazione del descrittore
             int clientSocket = fd_clients_sockets[i];
@@ -209,16 +188,8 @@ int main() {
             }
         }
 
-        /**
-         * @brief Utilizzo della funzione select per monitorare i descrittori di file dei socket.
-         *
-         * Questo blocco di codice utilizza la funzione select per controllare l'attività
-         * dei descrittori di file dei socket inclusi nell'insieme command_fds.
-         *
-         * @param max_client_fd Il valore massimo possibile per un descrittore di file di un client.
-         * @param command_fds Insieme di descrittori di file associati ai comandi dei client.
-         */
-        if (select(max_client_fd + 1, &command_fds, NULL, NULL, NULL) < 0 ) {
+
+        if (select(max_client_fd + 1, &command_fds, NULL, NULL, NULL) < 0 ) { /**< controllo dei descrittori pronti */
             perror("Error in select");
             exit(1);
         }
@@ -226,6 +197,7 @@ int main() {
         // se la socket del server ha una richiesta di connessione
         if (FD_ISSET(serverSocket, &command_fds)) {
             int newSocket; //crea un nuovo fd vuoto
+
             //il client associa il suo fd a quello appena creato
             if ((newSocket = accept(serverSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
                 perror("Error accepting connection");
@@ -235,20 +207,7 @@ int main() {
             printf("New connection accepted\n");
 
 
-
-            /**
-             * @brief Aggiunge la nuova connessione alla lista dei client.
-             *
-             * Questo ciclo for cerca una posizione libera nell'array fd_clients_sockets
-             * e associa la nuova connessione (newSocket) a quella posizione.
-             * 
-             * @details un indice di fd_clients_sockets è considerato libero se il sio valore è 0.
-             * se l'indice è occupato da un client il suo valore è maggiore di 0.
-             *
-             * @param newSocket Il descrittore di file della nuova connessione da aggiungere.
-             * @param max_client_fd Il valore massimo possibile per un descrittore di file di un client.
-             * @param fd_clients_sockets Array dei descrittori di file dei client.
-             */
+            //aggiunge il nuovo fd ad un indice libero in fd_clients_sockets
             for (int i = 0; i < max_client_fd; ++i) {
                 //se l'indice è libero
                 if (fd_clients_sockets[i] == 0) {
@@ -259,20 +218,10 @@ int main() {
             }
         }
 
-        /**
-         * @brief Verifica la presenza di dati da leggere sui socket dei client.
-         *
-         * Questo ciclo for verifica ogni descrittore di file in fd_client_sockets
-         * per determinare se è pronto per la lettura del comando, se questo è pronto esegue
-         * la richiesta del client.
-         *
-         * @param max_client_fd Il valore massimo possibile per un descrittore di file di un client.
-         * @param fd_clients_sockets Array dei descrittori di file dei client.
-         * @param command_fds Insieme di descrittori di file associati ai comandi dei client.
-         * @param dataSocket Il descrittore di file associato ai dati provenienti dai client.
-         */
+
+        //ciclo principale per l'esecuzione del servizio 
         for (int i = 0; i < max_client_fd; ++i) {
-            int clientSocket = fd_clients_sockets[i]; //scelta del client a cui eseguire il servizio
+            int clientSocket = fd_clients_sockets[i]; /**< client a cui viene erogato il servizio */
 
             //se clientSocket è associato a un fd 
             if (clientSocket > 0) {
@@ -281,13 +230,12 @@ int main() {
                    
                     //pulizia buffer di servizio prima dell'utilizzo
                     memset(buffer, 0, sizeof(buffer));
-                    //lettura della socket
+
+                    //viene letto il comando su clientSocket
                     ssize_t bytesRead = read(clientSocket, buffer, BUFFER_SIZE- 1); 
+
                     //aggiunta terminatore stringa
                     buffer[bytesRead] = '\0';
-
-                    printf("Contenuto del buffer ricevuto: %s\n", buffer);
-
 
                     if (bytesRead < 0) { //error
 
@@ -298,8 +246,10 @@ int main() {
                         //esecuizione della richiesta
 
                         char *DPI_response_code; /**< buffer per la ricezione dei codici del */
-                        //printf("elaborazione richiesta\n");
-                        DPI_response_code = serverPI(buffer, dataSocket, clientSocket, command_fds, fd_clients_sockets, i);
+                        
+                        //erogazione del servizio al client in esecuzione
+                        serverPI(buffer, dataSocket, clientSocket, command_fds, fd_clients_sockets, i);
+
                         //pulizia buffer di servizio
                         memset(buffer, 0, sizeof(buffer));
                         
@@ -323,59 +273,48 @@ int main() {
  * @brief Gestisce i comandi inviati dal client attraverso la connessione di controllo.
  *
  * Questa funzione interpreta e gestisce i comandi inviati dal client attraverso la connessione
- * di controllo. Esegue operazioni specifiche in base al comando ricevuto, interagendo con il
- * client attraverso la connessione di dati (DTP) quando necessario.
+ * di controllo. Manda il numero di porta di "DATA_PORT" al client a cui viene erogato il servizio, aspetta che
+ * il client si connette, elabora il comando e invia l'output al client.
  *
  * @param command       La stringa contenente il comando inviato dal client.
  * @param dataSocket    Il descrittore di file associato alla connessione di dati (DTP).
  * @param clientSocket  Il descrittore di file associato alla connessione di controllo del client.
  * @param command_fds   L'insieme di descrittori di file associati ai comandi dei client.
  * @param fd_clients_sockets Array dei descrittori di file dei client.
- * @param i             L'indice corrente nell'array dei descrittori di file dei client.
+ * @param i             L'indice corrente nell'array dei descrittori di file dei client (usato per il quit).
  *
- * @return Una stringa contenente il codice di risposta da inviare al client dopo l'esecuzione del comando.
- *         Può essere utilizzato per indicare il successo o il fallimento dell'operazione.
  */
-char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fds,int fd_clients_sockets[], int i) {
-    char* code_str = NULL;  // Inizializzazione a NULL di default
+void serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fds,int fd_clients_sockets[], int i) {
+    
     char* data_port_value = "50001"; /**< stringa contenente il nuemero di porta del DTP */
 
     
     int user_index; /**< user_index contiene l'indice dell'user in registered_user, il valore -1 di user_index significa che l'fd che sta eseguendo il server è un utente anonimo */
-    //restitusce l'indice dove è conservata la struttura dell'utente, se non la trova restituisce -1
+    
+    //restitusce l'indice dove è conservata la struttura dell'utente a cui è associato l'fd, se non la trova restituisce -1
     user_index = ricercaPerFd(registered_user,MAX_USER, clientSocket); 
     
     int is_logged; /**< variabile di stato che assume il valore 1 se l'fd servito è assocciato ad un user (loggato), altrimenti il suo valore sarà 0 (anonimo)*/ 
 
+    //se è un utente anonimo
     if(user_index == -1){
+        //il client in servizio è un user anonimo
         is_logged = 0;
 
-    } else if(registered_user[user_index].log_state == 1){
+    //se è un user loggato, controlla il suo log state
+    } else if(registered_user[user_index].log_state == 1){ 
         is_logged = 1;
     }
 
-    printf("is logged value : %d\n", is_logged);
+    
     char command_word[20]; /**< comando inserito dall'utente es : retr, stor */
     char arg[BUFFER_SIZE]; /**< argomento del comando  es: nomefile.text */
 
-    printf("il comando ricevuto è: %s\n", command);
+   
     
-    /**
-     * @brief divisione della stringa command
-     * 
-     * quando l'untente inserisce un comando da terminale es: "dele file.txt", quest'ultimo viene
-     * salvato interamente in nella stringa command. La funzione sscanf() divide la stringa command in due 
-     * stringhe : "command_word" per i comandi registrati all'interno del DPI e "arg" che contiene l'argomento
-     * del comando. Esempio : l'utente invia al server "dele file.txt", quindi command sarà uguale a "dele file.txt",
-     * dopo l'esecuzione dell'istruzione sscanf() command assumerà il valore di "dele" e arg "file.txt".
-     * 
-     * @param command stringa contenente il comando e il suo argomento inviato dal client.
-     * @param command_word stringa contenente il comando interpetrabile dal DPI
-     * @param arg stringa contenente l'argomento, il soggeto del comando.
-     * 
-     */
+    //la stringa command viene divisa nel comando (commando word) e l'oggetto del comando (arg)
     sscanf(command,"%s" "%s",command_word, arg);
-    printf("comando: %s, arg: %s\n", command_word, arg);
+    
 
     //-------------------------------------CONTROLLO DEI COMANDI----------------------------------------------------------------
 
@@ -393,9 +332,9 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
             exit(1);
         }
 
-        int find; /**< assume come valore l'indice dell'user dell'fd assocciato, il suo valore è -1 se è un utente anonimo*/
+        int find; /**< assume il valore -1 se il nome inserito dal client (arg) non è presente nella struttura che contiene gli user, altrimenti ritorna il suo indice*/
 
-        //controlla che l'nome (arg) inserito dall'untente esista tra gli utenti registrati 
+        //controlla che l'nome (arg) inserito dall'untente esista tra gli utenti registrati
         find = ricercaPerNome(registered_user, MAX_USER, arg);
 
         if((find > -1) && (registered_user[find].clientSocket == -1)){ //se l'utente è trovato e non ha gia un fd assegnato
@@ -411,13 +350,13 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
 
         }else if((find > -1) && (registered_user[find].clientSocket != -1)){ //se l'utente è già loggato
 
-            printf("utente gia assegnato\n");
-             //invia la risposta al client
+           
+            //invia la risposta al client
             char *user_ass ="utente gia loggato\n";
             write(newDataSocket, user_ass , strlen(user_ass));
 
         }else if(find == -1){ //se l'utente non è stato trovato
-            printf("utente non trovato\n");
+           
             //invia la risposta al client
             char *not_found = "user non trovato\n";
             write(newDataSocket, not_found, strlen(not_found));
@@ -427,8 +366,8 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
         //chiusura della socket del DTP
         close(newDataSocket);
        
-        code_str = "331";
-        //se l'fd che sta usando il servizio è stato connesso ad un user e non è loggato 
+       
+      //se l'fd che sta usando il servizio è stato connesso ad un user e non è loggato 
     } else if ((strncmp(command_word, "pass", 4)== 0 ) && (registered_user[user_index].clientSocket == clientSocket) && (is_logged == 0)) {
         
         //manda il numero di porta al client
@@ -441,24 +380,21 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
             exit(1);
         }
 
-        
-        printf("%s è stato trovato\n" ,registered_user[user_index].name);
 
-        //viene confrontata la pass dell'user con arg (pass inviata dall'client) e se client che richiede il servizio ha lo stesso fd asseggnato da user
+        //viene confrontata la pass dell'user con arg (pass inviata dall'client) e se il client che richiede il servizio ha lo stesso fd asseggnato da user
         if(((strcmp(registered_user[user_index].pass, arg) == 0) && (registered_user[user_index].clientSocket == clientSocket ))){
 
-            printf("%s è entrato\n" ,registered_user[user_index].name);
             //cast alla struttura
             struct USER *pUser = &registered_user[user_index];
             pUser->log_state = 1;
 
             //invio della risposta
             char user_logged[BUFFER_SIZE];
-            sprintf(user_logged, "Welcome in my FTP %s\n", registered_user[user_index].name);
+            sprintf(user_logged, "Welcome in my FTP\n");
 
             write(newDataSocket, user_logged , strlen(user_logged));
 
-        }//se l'fd non è lo stesso significa che client cercano di accedere allo stesso user
+        }//se l'fd non è lo stesso significa che piu client cercano di accedere allo stesso user
         else if(registered_user[user_index].clientSocket != clientSocket){ 
             
             //invio della risposta
@@ -478,8 +414,8 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
         //chiusura del data socket
         close(newDataSocket);
 
-        code_str = "230";
-    } else if ((strncmp(command_word, "retr", 4) == 0)) {
+        
+    } else if ((strncmp(command_word, "retr", 4) == 0)) {// per user anonimi e registrati
         
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
@@ -492,35 +428,39 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
         }
 
         
-        char file_path[BUFFER_SIZE];
+        char file_path[BUFFER_SIZE]; /**< dichiarazione del path da scaricare */
 
         //Se l'user non è anonimo
         if (user_index > -1){
-            //usa il suo dir personale
+            //usa il suo dir personale come path
             snprintf(file_path, sizeof(file_path), "%s/%s", registered_user[user_index].directoryPath, arg);
             printf("%s", file_path);
         }else{
-            //alterimenti usa la dir anonima
+            //alterimenti usa la dir anonima come path
             snprintf(file_path, sizeof(file_path), "%s/%s", anonDir, arg);
             printf("%s", file_path);
         }
 
 
+        //apertura del file da scaricare
         int file_fd = open(file_path, O_RDONLY);
 
+        //mettendo il seek alla fine del file si calcola la sua dimensione
         off_t file_size = lseek(file_fd, 0, SEEK_END);
         lseek(file_fd, 0, SEEK_SET);
 
         //invio del file
         sendfile(newDataSocket, file_fd, NULL, file_size);
 
+        //chiusura del file
         close(file_fd);
+
         //chiusura data socket
         close(newDataSocket);
          
 
-        code_str = "150";
-    } else if ((strncmp(command_word, "stor", 4)== 0) &&(is_logged == 1)) {
+        
+    } else if ((strncmp(command_word, "stor", 4)== 0) &&(is_logged == 1)) { //se l'user è loggato
         
     // Manda il numero di porta al client
     write(clientSocket, data_port_value, strlen(data_port_value));
@@ -532,39 +472,45 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
         exit(1);
     }
 
-    // Estrai il percorso del file dall'argomento del comando
-    char file_path_stor[BUFFER_SIZE];
-    memset(file_path_stor, 0, sizeof(file_path_stor));
 
+    //estrai il nome del file dal filepath inserito dal user
     char *nome_file;
     nome_file = basename(arg);
+
+    //costruzione del filepath di destinazione dove conservare il file uploadato dall'user
+    char file_path_stor[BUFFER_SIZE];
+    memset(file_path_stor, 0, sizeof(file_path_stor));
     
+    //usando la dir dell'user e il nome del file 
     snprintf(file_path_stor, sizeof(file_path_stor), "%s/%s", registered_user[user_index].directoryPath, nome_file);
    
-    // Crea un nuovo file per salvare il contenuto ricevuto
+    // Crea un nuovo file per salvare il contenuto ricevuto con il filepath costruito 
     int file_fd = open(file_path_stor, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (file_fd == -1) {
-    perror("Errore apertura file");
-    // Gestire l'errore in modo appropriato
+        perror("Errore apertura file");
+    
     }
 
+    //buffer che contiene i byte del file ricevuto
     char file_buffer[BUFFER_SIZE];
     ssize_t bytes_received;
     size_t total_bytes_received = 0;
 
+    //lettura dei bytes ricevuti e la loro scrittura sul file creato
     while ((bytes_received = read(newDataSocket, file_buffer, sizeof(file_buffer))) > 0) {
-    if (write(file_fd, file_buffer, bytes_received) != bytes_received) {
-        perror("Errore scrittura file");
-        // Gestire l'errore in modo appropriato
-    }
+        if (write(file_fd, file_buffer, bytes_received) != bytes_received) {
+            perror("Errore scrittura file");
+            
+        }
     total_bytes_received += bytes_received;
     }
 
     if (bytes_received == -1) {
-    perror("Errore lettura socket");
-    // Gestire l'errore in modo appropriato
+        perror("Errore lettura socket");
+    
     }
 
+    //chiusura del file appena ricevuto
     close(file_fd);
     printf("Ricevuti %zu bytes\n", total_bytes_received);
 
@@ -573,8 +519,8 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
     close(newDataSocket);
 
 
-        code_str = "150";
-    } else if(strncmp(command_word, "rnfr", 4) == 0 && (is_logged == 1)){
+        
+    } else if(strncmp(command_word, "rnfr", 4) == 0 && (is_logged == 1)){ //se l'user è loggato
        
 
         //manda il numero di porta al client
@@ -598,7 +544,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
         //se il file esiste e la dimensione dei path è corretta
         if ((access(rnfr_str, F_OK) != -1) && (strlen(rnfr_str) < sizeof(registered_user[user_index].rename_from))) {
 
-            // Copia la stringa nel campo rename_from
+            // Copia la stringa nel campo rename_from dell'user
             strcpy(registered_user[user_index].rename_from, rnfr_str);
             
             //invia il codice di successo al client
@@ -614,7 +560,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
     close(newDataSocket);
 
        
-}else if (strncmp(command_word, "rnto", 4) == 0 && is_logged == 1){
+}else if (strncmp(command_word, "rnto", 4) == 0 && is_logged == 1){ //se l'user è loggato
 
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
@@ -626,11 +572,13 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
             exit(1);
         }
 
-        char path_da_rn[BUFFER_SIZE];
-        memset(path_da_rn, 0, sizeof(path_da_rn));
-        snprintf(path_da_rn, sizeof(path_da_rn), "%s/%s", registered_user[user_index].directoryPath, arg);
+        char path_rnto[BUFFER_SIZE]; /**<Contiene il path del nuovo percorso */
+        memset(path_rnto, 0, sizeof(path_rnto));
+        //costruzione del nuovo percorso
+        snprintf(path_rnto, sizeof(path_rnto), "%s/%s", registered_user[user_index].directoryPath, arg);
 
-        if (rename(registered_user[user_index].rename_from, path_da_rn) == 0) {
+        //esecuzione del rename 
+        if (rename(registered_user[user_index].rename_from, path_rnto) == 0) {
         // Rinominazione riuscita
         char *rnto_success = "150 File rinominato con successo\n";
         write(newDataSocket, rnto_success, strlen(rnto_success));
@@ -640,10 +588,10 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
         char *rnto_fail = "550 Errore durante la rinominazione del file\n";
         write(newDataSocket, rnto_fail, strlen(rnto_fail));
         }
-
+    //chiusura della socket
     close(newDataSocket);
 
-}else if ((strncmp(command_word, "list", 4) == 0)) {
+}else if ((strncmp(command_word, "list", 4) == 0)) { //sia per user registrati che per anonimi
        
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
@@ -655,26 +603,26 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
             exit(1);
         }
 
-        if(user_index > -1){
-        // Trova l'utente corrente
-        struct USER *currentUser = &registered_user[user_index];
+        if(user_index > -1){//se l'user è loggato
+            // cast all struttura
+            struct USER *currentUser = &registered_user[user_index];
 
-        // Chiama la tua funzione per inviare i file al client
-        sendFileList(newDataSocket, currentUser->directoryPath);
+            // Chiama la tua funzione per inviare i file al client
+            sendFileList(newDataSocket, currentUser->directoryPath);
 
-        } else if(user_index == -1){
-        // Chiama la tua funzione per inviare i file al client
-        sendFileList(newDataSocket, anonDir);
+        } else if(user_index == -1){ // se l'user è anonimo
+            // Chiama la tua funzione per inviare i file al client
+            sendFileList(newDataSocket, anonDir);
         }
         
         //chiusura data socket
-         close(newDataSocket);
+        close(newDataSocket);
 
 
-        code_str = "150";
-    } else if (strncmp(command_word, "quit", 4) == 0) {
+        
+    } else if (strncmp(command_word, "quit", 4) == 0) { //sia per user registrati che per anonimi
 
-        //se l'fd asseggnato non è su default
+        //se l'fd asseggnato non è su default (user loggato)
         if(user_index > -1){
             // resetta le variabili dell'user a default
             registered_user[user_index].clientSocket = -1;
@@ -682,19 +630,15 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
         }
 
         // rimuove l'fd dall'insieme degli fds
-            FD_CLR(clientSocket, &command_fds); 
-            // la sua posizione in fd_clients viene liberata 
-            fd_clients_sockets[i] = 0;
+        FD_CLR(clientSocket, &command_fds); 
+        // la sua posizione in fd_clients viene liberata 
+        fd_clients_sockets[i] = 0;
 
-            //chiusura del client
-            printf("Client disconnesso\n");
-
-            close(clientSocket);
+        close(clientSocket);
            
-        code_str = "221";
+        
 
-    } else if ((strncmp(command_word, "dele", 4) == 0) && (is_logged == 1)) {
-    // Implementa la logica per il comando DELE
+    } else if ((strncmp(command_word, "dele", 4) == 0) && (is_logged == 1)) {//per user registrati
 
     //manda il numero di porta al client
     write(clientSocket, data_port_value, strlen(data_port_value));
@@ -707,7 +651,7 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
     }
 
 
-    char filePath[2048]; //**< usato per contenere il filepath colleggato all'utente concatentano al nome del file (arg) */
+    char filePath[BUFFER_SIZE]; //**< usato per contenere il filepath colleggato all'utente concatentano al nome del file (arg) */
     memset(filePath,0, sizeof(filePath)); //pulizia del del filepath
 
    
@@ -719,46 +663,42 @@ char* serverPI(char* command, int dataSocket, int clientSocket, fd_set command_f
     //rimozione del file 
     file_removed = remove(filePath);
 
-    printf("%s\n",filePath);
-
     if (file_removed == 0) {
         // Eliminazione riuscita
         char *dele_success = "150 File eliminato con successo\n";
         write(newDataSocket, dele_success, strlen(dele_success));
-        code_str = "150";
+       
     } else {
         // Eliminazione fallita
         char *dele_fail = "550 Errore durante l'eliminazione del file\n";
         write(newDataSocket, dele_fail, strlen(dele_fail));
-        code_str = "550";
+        
     }  
 
+    //chiusura del data socket
     close(newDataSocket);
 
 } else {
-        // Comando non riconosciuto
-       
-        
-        //manda il numero di porta al client
-        write(clientSocket, data_port_value, strlen(data_port_value));
+    //manda il numero di porta al client
+    write(clientSocket, data_port_value, strlen(data_port_value));
 
-        //accepet della connessione
-        int newDataSocket;
-        if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
-            perror("Error accepting connection to data socket");
-            exit(1);
-        }
-
-         char* cmd_not_found="comando non riconosciuto\n";
-         write(newDataSocket, cmd_not_found, strlen(cmd_not_found));
-
-        //chiusura data socket
-         close(newDataSocket);
-        
-        code_str = "500";
+    //accepet della connessione
+    int newDataSocket;
+    if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
+        perror("Error accepting connection to data socket");
+        exit(1);
     }
 
-    return code_str;
+    //invio dell'errore
+    char* cmd_not_found="comando non riconosciuto\n";
+    write(newDataSocket, cmd_not_found, strlen(cmd_not_found));
+
+    printf("cmd non riconosciuto\n");
+    //chiusura data socket
+    close(newDataSocket);
+        
+    }
+
 }
 
 /**
@@ -848,18 +788,4 @@ void sendFileList(int dataSocket, char *directoryPath) {
 
         // Chiudi la directory
         closedir(dir);
-}
-
-void receive_file_data(int socket, FILE *file) {
-    char buffer[BUFFER_SIZE];
-    ssize_t bytesRead;
-
-    // Leggi i dati dal client e scrivili nel file
-    while ((bytesRead = read(socket, buffer, sizeof(buffer))) > 0) {
-        fwrite(buffer, 1, bytesRead, file);
-    }
-
-    if (bytesRead < 0) {
-        perror("Errore durante la lettura dei dati dal socket");
-    }
 }

@@ -64,6 +64,7 @@ int main() {
         exit(1);
     }
 
+    int is_logged = 0;
     // Ciclo di comunicazione con il server
     while (1) {
         printf("Inserisci una stringa da inviare al server (exit per terminare):\n> ");
@@ -78,9 +79,12 @@ int main() {
 
         sscanf(command_buffer,"%s" "%s",command_word, arg);
 
+
+
         if(strcmp(command_word,"quit")==0){
             //invio comandi al server
             write(clientSocket, command_buffer, strlen(command_buffer));
+            is_logged = 0;
 
             close(clientSocket);
             exit(1);
@@ -110,7 +114,7 @@ int main() {
             close(dataSocket);
             
 
-        }else if(strcmp(command_word, "stor")==0){
+        }else if(strcmp(command_word, "stor")==0 &&(is_logged == 1)){
             // invio comando, solo la command word
             write(clientSocket, command_buffer, strlen(command_buffer));
 
@@ -198,7 +202,7 @@ int main() {
 
         close(dataSocket);
 
-        }else if(strcmp(command_word, "rnfr")==0){
+        }else if(strcmp(command_word, "rnfr")==0 &&(is_logged == 1)){
             //invio comandi al server
             write(clientSocket, command_buffer, strlen(command_buffer));
 
@@ -223,7 +227,7 @@ int main() {
             close(dataSocket);
             
             
-        }else if(strcmp(command_word, "rnto")==0){
+        }else if(strcmp(command_word, "rnto")==0 &&(is_logged == 1)){
             //invio comandi al server
             write(clientSocket, command_buffer, strlen(command_buffer));
 
@@ -248,7 +252,7 @@ int main() {
             close(dataSocket);
             
             
-        }else if(strcmp(command_word, "user")==0){
+        }else if(strcmp(command_word, "user")==0 &&(is_logged == 0)){
             //invio comandi al server
             write(clientSocket, command_buffer, strlen(command_buffer));
 
@@ -273,7 +277,7 @@ int main() {
             close(dataSocket);
             
             
-        }else if(strcmp(command_word, "pass")==0){
+        }else if(strcmp(command_word, "pass")==0 &&(is_logged == 0)){
             //invio comandi al server
             write(clientSocket, command_buffer, strlen(command_buffer));
 
@@ -290,6 +294,10 @@ int main() {
             char data_buffer[BUFFER_SIZE];
             read(dataSocket, data_buffer, BUFFER_SIZE-1);
             data_buffer[BUFFER_SIZE] = '\0';
+
+            if(strcmp(data_buffer,"Welcome in my FTP\n")==0){
+                is_logged = 1;
+            }
 
             printf("%s\n", data_buffer);
             memset(data_buffer, 0, sizeof(data_buffer));
@@ -359,7 +367,7 @@ int setupAndConnectDataSocket(char* port_responsed) {
         exit(1);
     }
 
-    
+    printf("connesso su %d\n", data_port);
     return dataSocket;
 }
 
