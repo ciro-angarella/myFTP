@@ -204,7 +204,7 @@ int main() {
                 exit(1);
             }
 
-            printf("New connection accepted\n");
+           
 
 
             //aggiunge il nuovo fd ad un indice libero in fd_clients_sockets
@@ -323,8 +323,7 @@ void serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fd
 
         //manda il numero di porta al client
         write(clientSocket, data_port_value, strlen(data_port_value));
-        printf("porta inviata\n");
-
+        
         //accepet della connessione
         int newDataSocket;
         if ((newDataSocket = accept(dataSocket, (struct sockaddr*)NULL, NULL)) < 0 ) {
@@ -338,7 +337,7 @@ void serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fd
         find = ricercaPerNome(registered_user, MAX_USER, arg);
 
         if((find > -1) && (registered_user[find].clientSocket == -1)){ //se l'utente è trovato e non ha gia un fd assegnato
-            printf("utente trovato\n");
+            
 
             //gli viene aasegnato un fd
             registered_user[find].clientSocket = clientSocket;
@@ -434,11 +433,11 @@ void serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fd
         if (user_index > -1){
             //usa il suo dir personale come path
             snprintf(file_path, sizeof(file_path), "%s/%s", registered_user[user_index].directoryPath, arg);
-            printf("%s", file_path);
+           
         }else{
             //alterimenti usa la dir anonima come path
             snprintf(file_path, sizeof(file_path), "%s/%s", anonDir, arg);
-            printf("%s", file_path);
+           
         }
 
 
@@ -512,7 +511,7 @@ void serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fd
 
     //chiusura del file appena ricevuto
     close(file_fd);
-    printf("Ricevuti %zu bytes\n", total_bytes_received);
+   
 
 
     //chiusura dtp socket
@@ -693,7 +692,7 @@ void serverPI(char* command, int dataSocket, int clientSocket, fd_set command_fd
     char* cmd_not_found="comando non riconosciuto\n";
     write(newDataSocket, cmd_not_found, strlen(cmd_not_found));
 
-    printf("cmd non riconosciuto\n");
+    
     //chiusura data socket
     close(newDataSocket);
         
@@ -738,7 +737,7 @@ int ricercaPerNome(struct USER array[], int lunghezza,  char *arg) {
 int ricercaPerFd(struct USER array[], int lunghezza,  int fd) {
     for (int i = 0; i < lunghezza; i++) {
         if (array[i].clientSocket == fd) {
-            //printf("ho trovato %s con find state %d", array[i].name, array[i].finded);
+            
             return i; // Nome trovato, restituisce l'indice
         }
     }
