@@ -1,6 +1,6 @@
 /**
  * @file server.c
- * @author Camilla Cacace (you@domain.com)
+ * @author Camilla Cacace (camilla.cacace001@studenti.uniparthenope.it)
  * @author Ciro Angarella (ciro.angarella001@studenti.uniparthenope.it)
  * @author Vincenzo Terracciano (vincenzo.terracciano003@studenti.uniparthenope.it)
  * 

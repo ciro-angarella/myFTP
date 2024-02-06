@@ -1,13 +1,16 @@
 /**
  * @file client.c
- * @author Camilla Cacace (you@domain.com)
+ * @author Camilla Cacace (camilla.cacace001@studenti.uniparthenope.it)
  * @author Ciro Angarella (ciro.angarella001@studenti.uniparthenope.it)
  * @author Vincenzo Terracciano (vincenzo.terracciano003@studenti.uniparthenope.it)
  * 
- * @brief  dettagli implementativi server hola
+ * @brief  dettagli implementativi cliennt
  * 
- * 
- * 
+ * il client dovendo comunicare con un unico server, viene implementato con un sistema di I/O bloccante, ad ogni richiesta inviata
+ * al server, il client ne aspetta la risposta sospendendo quindi la possibilità di mandare una seconda richiesta al server. Dopo
+ * aver mandato il comando al server  (command_buffer), questa stringa viene divisa nella command_word e nella stringa arg. La command
+ * word viene utilizzata per sapere in quale state del PI entrare, eseguendo successivamente la connessione sul DTP del server, e
+ * ricevere succesivamente l'output del server.
  * 
  * @version 0.1
  * @date 2024-02-01
@@ -26,11 +29,10 @@
 #include <fcntl.h>
 #include <sys/sendfile.h>
 
-#define PORT 50000
-#define BUFFER_SIZE 2048
+#define PORT 50000 /**< porta alla quale si collega il servizio */
+#define BUFFER_SIZE 1024 /**< dimensione del buffer usato dai buffer del client*/
 
 int setupAndConnectDataSocket(char* port_responsed);
-ssize_t fullread(int fd, void *buffer, size_t n);
 
 /**
  * @brief Funzione principale del programma client.
@@ -41,8 +43,10 @@ ssize_t fullread(int fd, void *buffer, size_t n);
  * e si connette al server su tale porta per ricevere dati.
  */
 int main() {
-    int clientSocket, dataSocket;
-    struct sockaddr_in serverAddr, dataAddr;
+    int clientSocket; /**< fd per l'invio dei comandi*/
+    int dataSocket; /**< fd per la connessione al DTP*/
+    struct sockaddr_in serverAddr; /**< indirizzo per la connessione al server*/
+    struct sockaddr_in dataAddr;/**< indirizzo per la connessione al DTP*/
     
     // Creazione del socket
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -63,11 +67,13 @@ int main() {
         exit(1);
     }
 
-    int is_logged = 0;
+    int is_logged = 0; /**< flag usata per determinare se il client è un user loggato o anonimo, (1 logged, 0 anon)*/
+
     // Ciclo di comunicazione con il server
     while (1) {
         printf("Inserisci una stringa da inviare al server (exit per terminare):\n> ");
-        char command_buffer[BUFFER_SIZE];
+
+        char command_buffer[BUFFER_SIZE]; /**< buffer che contiene il commando e l'oggetto del commando*/
         fgets(command_buffer, BUFFER_SIZE, stdin);
 
         // Rimuovi il newline inserito da fgets
@@ -79,10 +85,12 @@ int main() {
         sscanf(command_buffer,"%s" "%s",command_word, arg);
 
 
+//------------------------------------------------CLIENT PI-------------------------------------------------------------------
 
         if(strcmp(command_word,"quit")==0){
             //invio comandi al server
             write(clientSocket, command_buffer, strlen(command_buffer));
+
             is_logged = 0;
 
             close(clientSocket);
@@ -92,13 +100,16 @@ int main() {
             //invio comandi al server
             write(clientSocket, command_buffer, strlen(command_buffer));
 
+            //pulizia del buffer
             memset(command_buffer, 0, sizeof(command_buffer));
 
             //riceve la porta sulla quale collegarsi per il data transfer
             char port_responsed[BUFFER_SIZE];
             
+            //lettura della porta DTP inviata dal server
             read(clientSocket, port_responsed, BUFFER_SIZE-1);
 
+            //connessione al DTP
             dataSocket = setupAndConnectDataSocket(port_responsed);
 
             //riceve la risposta
@@ -122,10 +133,13 @@ int main() {
             //riceve la porta sulla quale collegarsi per il data transfer
             char port_responsed[BUFFER_SIZE];
             
+            //lettura della porta DTP inviata dal server
             read(clientSocket, port_responsed, BUFFER_SIZE-1);
 
+            //connessione al DTP
             dataSocket = setupAndConnectDataSocket(port_responsed);
 
+            //variabili per la gestione del file da mandare
             int file_fd;
             off_t file_size;
             ssize_t bytes_written;
@@ -154,10 +168,12 @@ int main() {
                 return EXIT_FAILURE;
             }
 
+            //chiusura del file
             close(file_fd);
 
             printf("\ninviati %zu bytes \n", bytes_written);
 
+            //chiusura del datasocket
             close(dataSocket);
 
 
@@ -171,14 +187,16 @@ int main() {
             //riceve la porta sulla quale collegarsi per il data transfer
             char port_responsed[BUFFER_SIZE];
 
+            //legge la porta inviata dal server per il DTP
             read(clientSocket, port_responsed, BUFFER_SIZE-1);
-
+            
+            //connessione
             dataSocket = setupAndConnectDataSocket(port_responsed);
 
             // Crea un nuovo file per salvare il contenuto ricevuto
             int file_fd = open( arg, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 
-            char file_buffer[BUFFER_SIZE];
+            char file_buffer[BUFFER_SIZE];/**< buffer dove vengo ricevuti i dati del file */
             ssize_t bytes_received;
 
             //scrittura sul file con i byte ricevuti
@@ -195,10 +213,10 @@ int main() {
             }
 
      
-
+        //pulizia del file buffer
         memset(file_buffer,0, sizeof(file_buffer));
 
-
+        //chiusura della datasocket
         close(dataSocket);
 
         }else if(strcmp(command_word, "rnfr")==0 &&(is_logged == 1)){
@@ -215,7 +233,7 @@ int main() {
             dataSocket = setupAndConnectDataSocket(port_responsed);
 
             //riceve la risposta
-            char data_buffer[BUFFER_SIZE];
+            char data_buffer[BUFFER_SIZE]; /**< buffer ricevente della rispota*/
             read(dataSocket, data_buffer, BUFFER_SIZE-1);
             data_buffer[BUFFER_SIZE] = '\0';
 
@@ -305,6 +323,29 @@ int main() {
             close(dataSocket);
             
             
+        } else if(strcmp(command_word, "help")==0){
+
+            // Puntatore al file
+            FILE *file;
+            char *file_path = "help.txt";
+            // Tentativo di aprire il file in modalità lettura ("r")
+            file = fopen(file_path, "r");
+            
+            // Verifica se il file è stato aperto correttamente
+            if (file == NULL) {
+                printf("Impossibile aprire il file %s.\n", file_path);
+                return 1; // Termina il programma con codice di errore
+            }
+            
+            // Legge e stampa il contenuto del file
+            int character;
+            while ((character = fgetc(file)) != EOF) {
+                printf("%c", character);
+            }
+            
+            // Chiude il file
+            fclose(file);
+
         }else{
 
             //invio comandi al server
@@ -333,18 +374,29 @@ int main() {
         }
     }
 
-    // Chiudi il socket
+    // Chiudi il socket, non arriva mai 
     close(clientSocket);
 
     return 0;
 }
 
+/**
+ * @brief Configura e stabilisce la connessione per il socket dati.
+ *
+ * Questa funzione si occupa di configurare e stabilire la connessione per il socket dati.
+ * Prende come parametro la porta ricevuta come risposta dal server.
+ *
+ * @param port_responsed La porta ricevuta come risposta dal server.
+ * @return Il descrittore del socket dati.
+ */
 int setupAndConnectDataSocket(char* port_responsed) {
     // Setup del data port
     int data_port = atoi(port_responsed);
 
+    int dataSocket; /**< fd dove il client è connesso al DTP, viene usato come output della funzione*/
+
     // Creazione del data socket
-    int dataSocket = socket(AF_INET, SOCK_STREAM, 0);
+    dataSocket  = socket(AF_INET, SOCK_STREAM, 0);
 
     if (dataSocket < 0) {
         perror("Errore nella creazione del data socket");
@@ -370,21 +422,3 @@ int setupAndConnectDataSocket(char* port_responsed) {
     return dataSocket;
 }
 
-ssize_t fullread(int fd, void *buffer, size_t n) {
-    ssize_t bytesRead = 0;
-    ssize_t totalBytesRead = 0;
-
-    while ((bytesRead = read(fd, buffer + totalBytesRead, n - totalBytesRead)) > 0) {
-        totalBytesRead += bytesRead;
-        if (totalBytesRead == n) {
-            // Leggi tutto il necessario
-            break;
-        }
-    }
-
-    if (bytesRead < 0) {
-        perror("Errore nella lettura dal socket");
-    }
-
-    return totalBytesRead;
-}
