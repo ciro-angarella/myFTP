@@ -30,6 +30,7 @@ sulla stessa macchina. Al momento della connessione il client sarà riconosciuto
 Si consiglia al primo avvio di usare il comando help.
 
 -----------------------------ACCEDERE COME USER REGISTRATO---------------------------------------------
+
 per testare il programma come user registrato, loggare come uno dei seguenti user registrati.
 
 NOME: ciro
