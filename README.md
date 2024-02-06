@@ -1,3 +1,11 @@
+---------------------------------------AUTORI----------------------------------------------
+1.Cacace Camilla MATR: 0124002645 github: https://github.com/Oneheroday
+2.Ciro Angarella MATR: 0124002559 github:
+3.Vincenzo Terracciano MATR:0124001862 github:
+
+codice gruppo: btlu25c203
+
+-------------------------------------------------------------------------------------------
 file particolari presenti in questa dir:
 
 1."help.txt"
@@ -9,7 +17,7 @@ file particolari presenti in questa dir:
 
 3."FTPpath"
     questa dir contiene le dir degli utenti anonimi e registrati. Ogni user registrato ha
-    una propria dir identificata dal proprio nome. Tutti gli user anonimi hanno una sola dirù
+    una propria dir identificata dal proprio nome. Tutti gli user anonimi hanno una sola dir
     chiamata "anon".
 
 4."myFTP.pdf"
