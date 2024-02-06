@@ -24,6 +24,7 @@ file particolari presenti in questa dir:
     Dopo di che ricompilare il file appena modificato con "gcc server.c -o servert"
 
 ---------------------------------------ESECUZIONE------------------------------------------------------
+
 avviato il client si sarà connessi automaticamnte al server.Il programma è impostato per un uso locale
 sulla stessa macchina. Al momento della connessione il client sarà riconosciuto dal server come anonimo.
 Si consiglia al primo avvio di usare il comando help.
